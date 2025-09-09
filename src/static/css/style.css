@@ -1,0 +1,225 @@
+/* === Layout === */
+body {
+    font-family: Arial, sans-serif;
+    margin: 20px;
+}
+
+.page {
+  display: none;
+}
+.page.active {
+  display: block;
+}
+
+.example-maps {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.example-maps > div {
+  flex: 1 1 45%;
+}
+
+#landmark-list {
+  list-style: none;
+  padding: 0;
+}
+
+#landmark-list li {
+  display: flex;            /* put input + button in a row */
+  align-items: center;      /* vertically center */
+  margin-bottom: 8px;
+}
+
+#landmark-list li input {
+  flex: 1;                  /* take all remaining space */
+  padding: 6px;
+  margin-right: 6px;
+}
+
+.map-observations {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 20px;
+}
+
+.map, .observations {
+    width: 48%;
+    border: 1px solid #ccc;
+    padding: 10px;
+}
+
+  #map-img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    transition: transform 0.3s ease;
+    cursor: zoom-in;
+  }
+  #map-container.zoomed {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(0,0,0,0.8);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+  }
+  #map-container.zoomed #map-img {
+    width: auto;
+    height: 80vh;
+    cursor: zoom-out;
+  }
+  #map-container.zoomed #map-close-btn {
+    display: block;
+  }
+  #map-close-btn {
+    display: none;
+    position: fixed;
+    top: 1rem;
+    right: 1rem;
+    z-index: 1001;
+    background: rgba(0,0,0,0.5);
+    border: none;
+    color: white;
+    font-size: 1.5rem;
+    line-height: 1;
+    width: 2rem;
+    height: 2rem;
+    border-radius: 50%;
+    cursor: pointer;
+  }
+
+.drawing-container {
+    display: flex;
+    margin-bottom: 20px;
+}
+
+.tools-board {
+    width: 25%;
+    padding: 10px;
+    border: 1px solid #ccc;
+}
+
+.drawing-board {
+    flex: 1;
+    border: 1px solid #ccc;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+canvas {
+    width: 100%;   /* make canvas fill available width */
+    height: auto; /* or use % / vh if you want it responsive */
+    max-width: 100%;
+    border: 3px solid #999;
+    background: #fff;
+}
+
+/* === Tool and Color Options === */
+.row {
+    margin-bottom: 15px;
+}
+
+.options {
+    list-style-type: none;
+    padding: 0;
+}
+
+.option {
+    cursor: pointer;
+    margin: 5px 0;
+}
+
+.option img {
+    width: 20px;
+    vertical-align: middle;
+}
+
+.colors .option {
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+    background: #ddd;
+    border: 1px solid #999;
+    position: relative;
+    cursor: pointer;
+}
+
+.colors .option:nth-child(1){
+  background-color: #4A98F7;
+}
+.colors .option:nth-child(2){
+  background-color: #000;
+}
+.colors .option:nth-child(3){
+  background-color: #E02020;
+}
+.colors .option:nth-child(4){
+  background-color: #6DD400;
+}
+
+.colors .option.selected::before{
+  position: absolute;
+  content: "";
+  top: 50%;
+  left: 50%;
+  height: 12px;
+  width: 12px;
+  background: inherit;
+  border-radius: inherit;
+  border: 2px solid #fff;
+  transform: translate(-50%, -50%);
+}
+.colors .option:first-child.selected::before{
+  border-color: #ccc;
+}
+
+.colors .option.selected {
+    border: 2px solid #000;
+}
+
+.option #color-picker{
+  opacity: 0;
+  cursor: pointer;
+}
+
+.clear-canvas:hover{
+  color: #fff;
+  background: #6C757D;
+}
+/* === Questions Section === */
+.questions {
+    margin-top: 20px;
+}
+
+#landmark-list {
+    list-style-type: none;
+    padding: 0;
+    margin: 10px 0;
+    border: 1px solid #ccc;
+    max-width: 90%;
+}
+
+#landmark-list li {
+    padding: 8px;
+    margin: 2px 0;
+    background: #f0f0f0;
+    cursor: grab;
+}
+
+#landmark-list li:focus {
+    outline: 2px solid #007BFF;
+    background: #e0eaff;
+}
+
+/* === Buttons === */
+button {
+    margin-top: 10px;
+    padding: 8px 12px;
+    cursor: pointer;
+}
