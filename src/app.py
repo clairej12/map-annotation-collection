@@ -105,11 +105,11 @@ def next_batch():
     
     def make_trajectory(t):
         # logic to grab the first `t.cutoff_idx` images
-        images = [ f"/image/{image_filename}"
+        images = [ f"{image_filename}"
                    for image_filename in routes_data[t.route_id]["observations"]]
         return {
             "task_id":    t.id,
-            "map_url":    f"/map/{routes_data[t.route_id]['map']}",
+            "map_url":    f"{routes_data[t.route_id]['map']}",
             "images":     images,
             "landmarks": t.landmarks,
         }
@@ -170,13 +170,17 @@ def next_batch():
     })
 
 # STATIC SERVING
-@app.route("/map/<path:fname>")
+MAPS_DIR = "/data/claireji/maps/easy_processed_maps_v2/"
+OBSERVATIONS_DIR = "/home/claireji/napkin-map/MapDataCollection/data/thumbnails_sharpened/"
+@app.route("/maps/<path:fname>")
 def get_map(fname):
-    return send_file(os.path.join(os.getcwd(), fname))
+    # print(f"Serving map file: {fname}")
+    return send_file(os.path.join(MAPS_DIR, fname))
 
-@app.route("/image/<path:fname>")
+@app.route("/observations/<path:fname>")
 def get_image(fname):
-    return send_file(os.path.join(os.getcwd(), fname))
+    # print(f"Serving observation file: {fname}")
+    return send_file(os.path.join(OBSERVATIONS_DIR, fname))
 
 @app.route("/save_drawing", methods=["POST"])
 @login_required

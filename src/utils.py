@@ -2,10 +2,10 @@ import json
 import os
 import pdb
 
-MAPS_DIR = "data/easy_processed_maps_v2/"
-OBSERVATIONS_DIR = "data/thumbnails_sharpened/"
-ROUTES_FILE = "data/test_positions_easy_processed_mapped_answered_redistanced_v2.json"
-LANDMARKS_FILE = "data/landmarks.json"
+MAPS_DIR = "/maps/"
+OBSERVATIONS_DIR = "/observations/"
+ROUTES_FILE = "../MapDataCollection/data/test_positions_easy_processed_mapped_answered_redistanced_v2.json"
+LANDMARKS_FILE = "../MapDataCollection/data/landmarks.json"
 route_ids = [10983,4085,2394,11661,9944,4881,5837,5163,3017,2804,9758,4546,7950,2648,5487,1086,2183,8624,8592,8505,5105,11455,7035,6316,9675,8473,8153,9089,9146,4159,8987,4765,9648,5501,1400,299,8262,10232,385,11502,3209,9968,7139,9733,9434,713,3304,8379,6895,2289,9159,31,3536,6485,2342,1835,9091,2468,3846,6094,5428,2167]
 
 def parse_routes():

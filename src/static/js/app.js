@@ -1,7 +1,7 @@
 // static/js/app.js
 
 const BASE = ""; // set to "" if running on localhost
-// const BASE = "http://tiger.lti.cs.cmu.edu:8000"; // set to your server URL
+// const BASE = "http://windoek.sp.cs.cmu.edu:8000"; // set to your server URL
 const STORAGE_KEY = "napkinMapSurveyState";
 const AUTOSAVE_INTERVAL_MS = 10000;
 const UNDO_LIMIT = 10;
@@ -273,7 +273,7 @@ function renderTask(){
 
 // ------------------ Render Observations ------------------
 function renderObsImage(t) {
-  console.log("getting image from: ", BASE)
+  console.log("getting observation from: ", BASE)
   document.getElementById("obs-image").src = BASE + t.images[currentObsIdx];
   saveState();
 }
