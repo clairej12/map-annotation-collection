@@ -113,7 +113,7 @@
     <!-- Task Page -->
     <div id="task-page" class="page">
         <div id="user-info" style="margin-bottom: 1em; font-weight: bold;">
-            User ID: {{ user_id }}, Study ID: {{ study_id }}
+        User ID: {{ user_id }}, Study ID: {{ study_id }}
         </div>
         <script src="{{ url_for('static', filename='app.js') }}"></script>
 
@@ -123,23 +123,19 @@
             <div id="modal-instr-content"></div>
         </div>
 
-        <!-- Map (hidden by default, button to open modal) -->
+        <!-- Map & Observations -->
         <div class="map" id="map-container">
-            <button id="open-map-btn">See Satellite Map</button>
-            <div id="map-modal" style="display:none;">
-                <img alt="Map" id="map-img">
-                <button id="map-close-btn" aria-label="Close zoom">✕</button>
-            </div>
+            <h2>Map</h2>
+            <img alt="Map" id="map-img">
+            <button id="map-close-btn" aria-label="Close zoom">✕</button>
         </div>
-
-        <!-- Observations -->
         <div class="observations">
-            <h2>Observations</h2>
-            <img id="obs-image" alt="Observation" style="width:100%">
-            <div style="margin-top:1rem;">
-                <button id="prev-obs">Previous Image</button>
-                <button id="next-obs">Next Image</button>
-            </div>
+                <h2>Observations</h2>
+                <img id="obs-image" alt="Observation" style="width:100%">
+                <div style="margin-top:1rem;">
+                    <button id="prev-obs">Previous Image</button>
+                    <button id="next-obs">Next Image</button>
+                </div>
         </div>
 
         <!-- Drawing Board -->
@@ -187,43 +183,30 @@
             </section>
         </div>
 
-        <!-- Navigation to Landmark Page -->
-        <div style="margin-top: 1rem;">
-            <button type="button" id="go-to-landmarks-btn">Proceed to Landmarks</button>
+        <!-- Questions -->
+        <div class="questions">
+            <h2>Questions</h2>
+            <form id="landmarks-form">
+                <label for="landmark-list">
+                    Please list all the landmarks you included in your drawing in the order they are seen in the observations.
+                    <br>
+                    Below are some suggested landmarks that you can overwrite, reorder, or delete.
+                </label>
+                <ul id="landmark-list">
+                    <!-- Landmarks will be injected dynamically via JS -->
+                </ul>
+                <input type="hidden" name="landmarks" id="landmarks-input">
+                <button type="button" id="save-landmarks-btn">Save Landmarks</button>
+            </form>
         </div>
-    </div>
 
-    <!-- Landmark Page -->
-    <div id="landmark-page" class="page">
-        <h2>Landmarks</h2>
-        <!-- Re-display saved drawing -->
-        <div id="saved-drawing-container">
-            <h3>Your Saved Sketch Map</h3>
-            <img id="saved-drawing-img" alt="Saved sketch map" style="max-width:100%;border:1px solid #ccc;">
-        </div>
-
-        <!-- Landmarks List -->
-        <form id="landmarks-form">
-            <label for="landmark-list">
-                Please list all the landmarks you included in your drawing in the order they are seen in the observations.  
-                <br>
-                Below are some suggested landmarks that you can overwrite, reorder, or delete.
-            </label>
-            <ul id="landmark-list">
-                <!-- Landmarks will be injected dynamically via JS -->
-            </ul>
-            <input type="hidden" name="landmarks" id="landmarks-input">
-            <button type="button" id="save-landmarks-btn">Save Landmarks</button>
-        </form>
-
-        <!-- Continue -->
         <button type="button" id="submit-all-btn" style="display:block;margin:auto;">Submit All</button>
         <button type="button" id="save-btn">Save & Next</button>
     </div>
 
-    <!-- Done Page -->
     <div id="done-page" class="page">
-        <!-- unchanged content -->
+        <h2>Thanks for your help!</h2>
+        <button id="new-batch-btn">Do another batch</button>
     </div>
 
     <script src="{{ url_for('static', filename='js/app.js') }}" defer></script>

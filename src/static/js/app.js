@@ -18,6 +18,7 @@ let state = {
   tIdx: 0,
   obsIdxPerTask: {}, // map task_id -> obs idx
   drawings: {},      // map task_id -> base64 image (finalized)
+  drawing_paths: {},
   landmarks: {}      // map task_id -> array of strings
 };
 
@@ -64,6 +65,7 @@ document.addEventListener("keydown", e => {
       tIdx: 0,
       obsIdxPerTask: {}, // map task_id -> obs idx
       drawings: {},      // map task_id -> base64 image (finalized)
+      drawing_paths: {},
       landmarks: {}      // map task_id -> array of strings
     };
 
@@ -125,10 +127,12 @@ exampleObsImg.src = exampleObsImages[exampleObsIdx];
 document.getElementById("example-prev-obs").onclick = () => {
     exampleObsIdx = Math.max(exampleObsIdx - 1, 0);
     exampleObsImg.src = exampleObsImages[exampleObsIdx];
+    taskMetrics.clicks.prevObs += 1;
 };
 document.getElementById("example-next-obs").onclick = () => {
     exampleObsIdx = Math.min(exampleObsIdx + 1, exampleObsImages.length - 1);
     exampleObsImg.src = exampleObsImages[exampleObsIdx];
+    taskMetrics.clicks.nextObs += 1;
 };
 
 document.onkeydown = e => {
@@ -261,9 +265,6 @@ function renderTask(){
     if (e.key === "ArrowRight") document.getElementById("next-obs").click();
   };
 
-  // Landmarks
-  renderLandmarksUI(t);
-
   // Drawing pad
   initCanvas(t);
 
@@ -323,6 +324,7 @@ function renderLandmarksUI(t) {
     delBtn.onclick = () => {
       taskLandmarks.splice(idx, 1);
       renderLandmarksUI(t);
+      taskMetrics.clicks.delLmClick += 1;
       saveState();
     };
 
@@ -337,6 +339,7 @@ function renderLandmarksUI(t) {
   addBtn.onclick = () => {
     taskLandmarks.push("");
     renderLandmarksUI(t);
+    taskMetrics.clicks.addLmClick += 1;
     saveState();
   };
   lmList.appendChild(addBtn);
@@ -365,6 +368,7 @@ function renderLandmarksUI(t) {
         const [moved] = arr.splice(dragSrcIdx, 1);
         arr.splice(targetIdx, 0, moved);
         renderLandmarksUI(t);
+        taskMetrics.clicks.reorderLm += 1;
         saveState();
       }
     });
@@ -649,7 +653,8 @@ if (saveImgBtn) saveImgBtn.addEventListener("click", async () => {
     return;
   }
   // Save to backend (drawing endpoint)
-  await saveDrawingToBackend(t.task_id, canvas.toDataURL("image/png"));
+  const result = await saveDrawingToBackend(t.task_id, canvas.toDataURL("image/png"));
+  state.drawing_paths[t.task_id] = result.file;
   state.drawings[t.task_id] = canvas.toDataURL("image/png");
   commitDrawingSnapshotToState(t.task_id);
   alert("Drawing saved.");
@@ -711,19 +716,71 @@ function initCanvas(t) {
   hasDrawn = !!state.drawings[t.task_id];
 }
 
+// ------------------ Move to Landmarks Page ------------------
+document.getElementById("go-to-landmarks-btn").addEventListener("click", () => {
+  if (isCanvasBlank(canvas)) {
+    alert("You cannot save an empty board!");
+    return;
+  }
+  // commit drawing snapshot
+  commitDrawingSnapshotToState(t.task_id);
+  // save to backend
+  saveCurrentTaskToBackend();
+
+  // ask user before proceeding
+  const proceed = confirm("Moving to landmarks page. You will not be able to return to drawing.\n\nDo you want to continue?");
+  if (!proceed) {
+    return; // stop here, stay on the same page
+  }
+
+  // Hide task page
+  document.getElementById("task-page").classList.remove("active");
+
+  // Show landmark page
+  document.getElementById("landmark-page").classList.add("active");
+
+  const t = batch[state.tIdx];
+  // Landmarks
+  renderLandmarksUI(t);
+
+  // Start landmark timer
+  startLandmarkTimer();
+
+  // Commit drawing metrics
+  finalizeTaskMetrics();
+
+  // Load in saved drawing
+  const savedImgEl = document.getElementById("saved-drawing-img");
+  if (canvas && savedImgEl) {
+    savedImgEl.src = state.drawing_paths[t.task_id] || state.drawings[t.task_id];
+  }
+});
+
 // ------------------ Task Metrics ------------------
 function startTaskTimer() {
   taskMetrics.startTime = performance.now();
+  taskMetrics.landmarkStartTime = null;
   taskMetrics.clicks = {
     prevObs: 0,
     nextObs: 0,
-    lmClick: 0,
+    addLmClick: 0,
+    delLmClick: 0,
+    reorderLm: 0
   };
+}
+
+function startLandmarkTimer() {
+  taskMetrics.landmarkStartTime = performance.now();
 }
 
 function finalizeTaskMetrics() {
   const now = performance.now();
-  taskMetrics.durationMs = now - taskMetrics.startTime;
+  taskMetrics.drawingDurationMs = now - taskMetrics.startTime;
+}
+
+function finalizeLandmarkMetrics() {
+  const now = performance.now();
+  taskMetrics.landmarkDurationMs = now - taskMetrics.landmarkStartTime;
 }
 
 // ------------------ Autosave ------------------
@@ -737,32 +794,34 @@ function startAutoSave() {
 async function saveCurrentTaskToBackend() {
   const t = batch[state.tIdx];
   if (!t) return;
-  const landmarks = state.landmarks[t.task_id] || [];
-  console.log("Task metrics at save:", taskMetrics);
-  const payload = { 
-    task_id: t.task_id, 
-    landmarks, 
-    metrics: {
-        durationMs:    taskMetrics.durationMs,
-        clickCounts:  taskMetrics.clicks
-      }
+
+  // if on task page attempt to save drawing if present
+  if (state.currentPage === "task-page") {
+    if (!state.drawings[t.task_id] && !isCanvasBlank(canvas)) {
+      state.drawings[t.task_id] = canvas.toDataURL("image/png");
+      const result = await saveDrawingToBackend(t.task_id, state.drawings[t.task_id]);
+      state.drawing_paths[t.task_id] = result.file;
     }
-
-  // TODO: adjust backend to accept drawing separately if needed
-  try {
-    await fetch(BASE + "/save_answer", {
-      method: "POST",
-      headers: {"Content-Type":"application/json"},
-      body: JSON.stringify(payload)
-    });
-  } catch (err) {
-    console.warn("Autosave save_answer failed:", err);
-  }
-
-  // Also attempt to save drawing separately if present
-  if (!state.drawings[t.task_id] && !isCanvasBlank(canvas)) {
-    state.drawings[t.task_id] = canvas.toDataURL("image/png");
-    await saveDrawingToBackend(t.task_id, state.drawings[t.task_id]);
+  } else if (state.currentPage === "landmark-page") {
+    const landmarks = state.landmarks[t.task_id] || [];
+    console.log("Task metrics at save:", taskMetrics);
+    const payload = { 
+      task_id: t.task_id, 
+      landmarks, 
+      metrics: {
+          durationMs:    taskMetrics.durationMs,
+          clickCounts:  taskMetrics.clicks
+        }
+      }
+    try {
+      await fetch(BASE + "/save_answer", {
+        method: "POST",
+        headers: {"Content-Type":"application/json"},
+        body: JSON.stringify(payload)
+      });
+    } catch (err) {
+      console.warn("Autosave save_answer failed:", err);
+    }
   }
 
   // persist locally as well
@@ -775,15 +834,24 @@ async function saveCurrentTaskToBackend() {
 /* Save drawing to backend (separate endpoint) */
 async function saveDrawingToBackend(task_id, base64image) {
   try {
-    await fetch(BASE + "/save_drawing", {
+    const res = await fetch(BASE + "/save_drawing", {
       method: "POST",
-      headers: {"Content-Type":"application/json"},
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ task_id: task_id, image: base64image })
     });
+
+    if (!res.ok) {
+      throw new Error(`HTTP error! Status: ${res.status}`);
+    }
+
+    const result = await res.json(); // parse backend JSON
+    return result;
   } catch (err) {
     console.warn("saveDrawingToBackend failed:", err);
+    return { success: false, error: err.message };
   }
 }
+
 
 /* Save landmarks to backend (separate endpoint) */
 async function saveLandmarksToBackend(task_id, landmarks) {
@@ -879,16 +947,8 @@ document.getElementById("save-btn").onclick = async () => {
     alert("Landmark validation failed: " + landmarkValidation.reason);
     return;
   }
-  
-  if (isCanvasBlank(canvas)) {
-    alert("You cannot save an empty board!");
-    return;
-  }
 
-  // commit drawing snapshot
-  commitDrawingSnapshotToState(t.task_id);
-
-  finalizeTaskMetrics();
+  finalizeLandmarkMetrics();
 
   // save to backend
   await saveCurrentTaskToBackend();
@@ -943,6 +1003,7 @@ function updateSaveButtons() {
 //     tIdx: 0,
 //     obsIdxPerTask: {},
 //     drawings: {},
+//     drawing_paths: {},
 //     landmarks: {}
 //   };
 //   batch = [];

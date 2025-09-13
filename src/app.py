@@ -61,6 +61,9 @@ def authenticate():
     HARDCODED_STUDY_ID = "ClaireTest123"
     if study_id != HARDCODED_STUDY_ID:
         return jsonify({"status": "error", "message": "Invalid study ID"}), 403
+    
+    if not user_id:
+        return jsonify({"status": "error", "message": "Missing user ID"}), 400
 
     user = User.query.filter_by(hit_id=user_id).first()
     if not user:

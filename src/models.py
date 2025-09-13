@@ -29,6 +29,6 @@ class Response(db.Model):
     task_id         = db.Column(db.Integer, db.ForeignKey("task.id"), nullable=False)
     landmarks       = db.Column(db.JSON, default=list)
     drawing_path    = db.Column(db.Text, nullable=True)
-    duration        = db.Column(db.Float, nullable=False)
+    duration        = db.Column(db.Float, nullable=True)
     clickCounts     = db.Column(db.JSON, default=dict)
     timestamp       = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))

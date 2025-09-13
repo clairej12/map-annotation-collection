@@ -38,12 +38,16 @@ body {
   margin-right: 6px;
 }
 
-.map, .observations {
+.map-observations {
     display: flex;
     justify-content: space-between;
+    margin-bottom: 20px;
+}
+
+.map, .observations {
+    width: 48%;
     border: 1px solid #ccc;
     padding: 10px;
-    flex-direction: column;
 }
 
   #map-img {
