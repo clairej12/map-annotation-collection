@@ -115,7 +115,6 @@
         <div id="user-info" style="margin-bottom: 1em; font-weight: bold;">
             User ID: {{ user_id }}, Study ID: {{ study_id }}
         </div>
-        <script src="{{ url_for('static', filename='app.js') }}"></script>
 
         <button id="show-instructions-btn" style="margin-left:auto;">Show Instructions</button>
 
@@ -126,9 +125,9 @@
         <!-- Map (hidden by default, button to open modal) -->
         <div class="map" id="map-container">
             <button id="open-map-btn">See Satellite Map</button>
-            <div id="map-modal" style="display:none;">
+            <div id="map-modal">
                 <img alt="Map" id="map-img">
-                <button id="map-close-btn" aria-label="Close zoom">✕</button>
+                <button id="map-hide-btn" aria-label="Hide map">✕</button>
             </div>
         </div>
 

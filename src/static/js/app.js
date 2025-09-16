@@ -282,18 +282,35 @@ function renderObsImage(t) {
 // ------------------ Map Zoom on Click ------------------
 window.addEventListener("DOMContentLoaded", () => {
   const container = document.getElementById("map-container");
+  const openMapBtn = document.getElementById("open-map-btn");
+  const mapOverlay = document.getElementById("map-modal");
   const img       = document.getElementById("map-img");
   const closeBtn  = document.getElementById("map-close-btn");
+  const hideBtn = document.getElementById("map-hide-btn");
 
-  // Clicking the image zooms in
-  img.addEventListener("click", () => {
-    container.classList.add("zoomed");
-  });
+  if (openMapBtn) {
+    // Clicking the open button shows the overlay
+    openMapBtn.addEventListener("click", () => {
+      mapOverlay.classList.add("visible");
+    });
 
-  // Clicking the X zooms back out
-  closeBtn.addEventListener("click", () => {
-    container.classList.remove("zoomed");
-  });
+    // Clicking the close button hides the overlay
+    hideBtn.addEventListener("click", () => {
+      mapOverlay.classList.remove("visible");
+    });
+  }
+
+  if (closeBtn) {
+    // Clicking the image zooms in
+    img.addEventListener("click", () => {
+      container.classList.add("zoomed");
+    });
+
+    // Clicking the X zooms back out
+    closeBtn.addEventListener("click", () => {
+      container.classList.remove("zoomed");
+    });
+  }
 });
 
 // ------------------ Landmarks UI ------------------
@@ -722,6 +739,7 @@ document.getElementById("go-to-landmarks-btn").addEventListener("click", () => {
     alert("You cannot save an empty board!");
     return;
   }
+  const t = batch[state.tIdx];
   // commit drawing snapshot
   commitDrawingSnapshotToState(t.task_id);
   // save to backend
@@ -739,7 +757,6 @@ document.getElementById("go-to-landmarks-btn").addEventListener("click", () => {
   // Show landmark page
   document.getElementById("landmark-page").classList.add("active");
 
-  const t = batch[state.tIdx];
   // Landmarks
   renderLandmarksUI(t);
 
@@ -823,11 +840,7 @@ async function saveCurrentTaskToBackend() {
       console.warn("Autosave save_answer failed:", err);
     }
   }
-
-  // persist locally as well
-  state.savedAns[t.task_id] = state.savedAns[t.task_id] || {};
-  state.savedAns[t.task_id].landmarks = landmarks;
-  state.savedAns[t.task_id].obs_index = state.obsIdxPerTask[t.task_id] || 0;
+  
   saveState();
 }
 
@@ -1012,20 +1025,23 @@ function updateSaveButtons() {
 //   location.reload();
 // });
 
-document.getElementById("new-batch-btn").onclick = () => {
-  state = {
-    currentPage: "instr-page",
-    batch: [],
-    savedAns: {},
-    tIdx: 0,
-    obsIdxPerTask: {},
-    drawings: {},
-    landmarks: {}
+const newBatchBtn = document.getElementById("new-batch-btn");
+if (newBatchBtn) {
+  newBatchBtn.onclick = () => {
+    state = {
+      currentPage: "instr-page",
+      batch: [],
+      savedAns: {},
+      tIdx: 0,
+      obsIdxPerTask: {},
+      drawings: {},
+      landmarks: {}
+    };
+    batch = [];
+    savedAns = {};
+    saveState();
+    show("instr-page");
   };
-  batch = [];
-  savedAns = {};
-  saveState();
-  show("instr-page");
 };
 
 /* ------------------ Helpful: save state before unload ------------------ */

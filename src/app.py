@@ -175,6 +175,7 @@ def next_batch():
 # STATIC SERVING
 MAPS_DIR = "/data/claireji/maps/easy_processed_maps_v2/"
 OBSERVATIONS_DIR = "/home/claireji/napkin-map/MapDataCollection/data/thumbnails_sharpened/"
+USER_DRAWINGS_DIR = "../user_drawings/"
 @app.route("/maps/<path:fname>")
 def get_map(fname):
     # print(f"Serving map file: {fname}")
@@ -184,6 +185,10 @@ def get_map(fname):
 def get_image(fname):
     # print(f"Serving observation file: {fname}")
     return send_file(os.path.join(OBSERVATIONS_DIR, fname))
+
+@app.route("/user_drawings/<path:fname>")
+def get_user_drawing(fname):
+    return send_file(os.path.join(USER_DRAWINGS_DIR, fname))
 
 @app.route("/save_drawing", methods=["POST"])
 @login_required
@@ -244,7 +249,8 @@ def save_drawing():
 
     db.session.commit()
 
-    return jsonify(success=True, file=filename)
+    print(f"Saved drawing for user {current_user.id}, task {task_id} at {filepath}")
+    return jsonify(success=True, file="/"+filepath)
 
 @app.route("/save_landmarks", methods=["POST"])
 @login_required
