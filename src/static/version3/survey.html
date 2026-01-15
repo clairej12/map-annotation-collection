@@ -10,103 +10,38 @@
     <!-- Single source of instructions -->
     <template id="instructions-template">
     <h2>Instructions</h2>
-
-    <p>You will complete <strong>6 routes</strong>. For each route, follow the steps below.</p>
-
-    <p><strong>Estimated time:</strong> Most participants finish in <strong>45–60 minutes</strong>.</p>
-
-    <h3>What you will see</h3>
+    <p>This section contains <strong>10 routes</strong>. For each route:</p>
     <ul>
-    <li>
-        A <strong>street-view video</strong> of a route depicting a navigator’s perspective as they traverse the route.
-    </li>
-
-    <li>
-        During the video, markers <strong>A, B, and C</strong> will briefly appear at the bottom-left corner at three different moments.
-        <ul>
-        <li>The markers may appear in <strong>any order</strong>.</li>
-        <li>Each marker appears only briefly.</li>
-        </ul>
-    </li>
-
-    <li>
-        A <strong>satellite map</strong> (click <em>“See Satellite Map”</em>) showing the same route from
-        <strong>Start (S)</strong> to <strong>Goal (G)</strong>, passing through points
-        <strong>A, B, and C</strong> in the same order as the video.
-    </li>
+        <li>You will see a <strong>satellite map</strong> with a path marked from <strong>Start (S)</strong> to <strong>Goal (G)</strong>, passing through <strong>intermediate points (1, 2, 3)</strong>.</li>
+        <li>You will also see a <strong>series of street-view observations</strong> along the path.</li>
+        <li>Your task:</li>
+        <ol>
+            <li><strong>Draw a sketch map</strong> on the canvas that would help someone navigate from Start to Goal, pausing at each of the numbered points (1, 2, 3) along the way.  
+                <ul>
+                    <li>Include <strong>landmarks</strong> (e.g., shops, buildings, trees, signs) and <strong>road features</strong> (e.g., intersections, turns, crossings) that would help a person know where they are at each stage of the path.</li>
+                    <li>Make sure the sketch shows how the path connects from Start → 1 → 2 → 3 → Goal.</li>
+                </ul>
+            </li>
+            <li><strong>Create an ordered list of landmarks and road features</strong> you included on your sketch map.
+                <ul>
+                    <li>We provide some starter landmark suggestions for you.</li>
+                    <li>You can <strong>edit</strong> the text, <strong>add/delete</strong> landmarks, and <strong>drag-and-drop</strong> to reorder them.</li>
+                </ul>
+            </li>
+        </ol>
+        <li>When you are satisfied with both your <strong>sketch map</strong> and <strong>landmark list</strong>, click <strong>"Save & Next"</strong> to continue.</li>
+        <li>Once you have completed all 10 routes, click <strong>"Submit All"</strong>.</li>
     </ul>
-
-    <h3>Your task</h3>
-    <ol>
-    <li>
-        <strong>Draw a sketch map</strong> on the canvas that would allow someone to navigate from
-        <strong>Start (S)</strong> to <strong>Goal (G)</strong>, stopping accurately at
-        <strong>A, B, and C</strong> along the way.
-
-        <p><strong>Important:</strong> Your sketch does <em>not</em> need to be artistically accurate or to scale.
-        Simple lines, arrows, and rough shapes are sufficient.</p>
-
-        <ul>
-        <li>
-            Label the points in the <strong>order they appear along the path</strong>
-            (e.g., <em>S → B → A → C → G</em>).
-        </li>
-        <li>
-            Include helpful <strong>landmarks</strong> (e.g., buildings, shops, signs, trees).
-        </li>
-        <li>
-            Include key <strong>road features</strong> (e.g., intersections, turns, crossings).
-        </li>
-        <li>
-            Clearly show how the route connects from
-            <strong>Start → A/B/C → A/B/C → A/B/C → Goal</strong>.
-        </li>
-        </ul>
-
-        <p><strong>Text-only maps are not acceptable.</strong> Your sketch must include
-        <strong>drawn paths or shapes</strong> (lines, arrows, or curves).</p>
-
-        <p>
-        <em>Test yourself:</em>
-        If the markers A/B/C were removed from the video, could someone use your sketch map
-        to pause the video at the correct moments for A, B, and C?
-        </p>
-
-        <p>
-        <em>Tip:</em> Each point A/B/C should have at least one landmark or road feature separating it from the next.
-        </p>
-    </li>
-
-    <li>
-        When you are satisfied with your <strong>sketch map</strong>, click
-        <strong>“Proceed to Landmarks”</strong>.
-        <p><strong>Important:</strong> You will not be able to return to your drawing after this step.</p>
-    </li>
-
-    <li>
-        On the <strong>Landmarks</strong> page, create an <strong>ordered list</strong> of the landmarks and road
-        features shown in your sketch.
-        <ul>
-        <li>You must include <strong>Start, Goal, and points A/B/C</strong>.</li>
-        <li>You may <strong>edit text</strong>, <strong>add or delete items</strong>, and
-            <strong>drag-and-drop</strong> to reorder the list.</li>
-        </ul>
-    </li>
-    </ol>
-
-    <p>
-    When you are satisfied with the <strong>landmark list</strong>, click
-    <strong>“Save & Next”</strong>.
-    </p>
-
-    <p>
-    After completing all routes, click <strong>“Submit All”</strong>.
-    </p>
 
     <h3>Additional Notes</h3>
     <ul>
-    <li>You can click on the <strong>satellite map</strong> to enlarge it.</li>
-    <li>You can rewatch the video as many times as you like and use the scrub bar to jump between parts of the video.</li>
+        <li>You can click on the <strong>satellite map</strong> to enlarge it.</li>
+        <li>To move through the street-view sequence, either:
+            <ul>
+                <li>Click on the observation and use the <strong>arrow keys</strong>, or</li>
+                <li>Use the <strong>“Previous Image”</strong> / <strong>“Next Image”</strong> buttons.</li>
+            </ul>
+        </li>
     </ul>
     </template>
 
@@ -121,13 +56,13 @@
             <div class="example-maps">
                 <div>
                     <h4>Satellite Map</h4>
-                    <img src="{{ url_for('static', filename='images/rid_72.png') }}" 
+                    <img src="{{ url_for('static', filename='images/test_easy_processed_maps_2804.png') }}" 
                         alt="Example satellite map" 
                         style="max-width:100%;border:1px solid #ccc;">
                 </div>
                 <div>
                     <h4>Hand-Drawn Map</h4>
-                    <img src="{{ url_for('static', filename='images/Boston Map Sketch.jpg') }}" 
+                    <img src="{{ url_for('static', filename='images/sketched_map_2804_cropped.jpg') }}" 
                         alt="Example sketch map" 
                         style="max-width:100%;border:1px solid #ccc;">
                 </div>
@@ -136,14 +71,13 @@
             <!-- Observations carousel -->
             <div class="example-observations" style="margin-top:1rem;">
                 <h4>Example Observations</h4>
-                <video
-                    id="example-obs-video"
-                    width="100%"
-                    controls
-                    preload="metadata"
-                >
-                    <source src="{{ url_for('serve_video', filename='rid_72.mp4') }}" type="video/mp4">
-                </video>
+                <img id="example-obs-img" 
+                    alt="Example observation" 
+                    style="width:100%;border:1px solid #ccc;">
+                <div style="margin-top:0.5rem;">
+                    <button id="example-prev-obs">Previous</button>
+                    <button id="example-next-obs">Next</button>
+                </div>
             </div>
 
             <!-- Example landmarks -->
@@ -151,24 +85,17 @@
                 <h4>Example Landmark List (in the order they are seen in the observations)</h4>
                 <ul>
                     <li>Start (S)</li>
-                    <li>First intersection with crosswalks</li>
-                    <li>Second intersection with crosswalks</li>
-                    <li>Point B</li>
-                    <li>Third intersection with crosswalks</li>
-                    <li>Pass through fourth intersection with crosswalks</li>
-                    <li>Turn onto alleyway</li>
-                    <li>Parking spots on either side of the street</li>
-                    <li>Point C</li>
-                    <li>Tall brick buildings on either side</li>
-                    <li>Pass through fifth intersection with crosswalks</li>
-                    <li>Turn onto Public Alley</li>
-                    <li>Parking spots on either side of the street</li>
-                    <li>Point A</li>
-                    <li>Turn out of alleyway</li>
-                    <li>Pass through sixth intersection with crosswalks</li>
-                    <li>Pass seventh intersection with crosswalks</li>
-                    <li>Park with grass and trees on either side of the street</li>
-                    <li>Turn at eighth intersection with crosswalks</li>
+                    <li>Gourmet Deli (red colored)</li>
+                    <li>Endpoint 1</li>
+                    <li>La Pulperia</li>
+                    <li>First intersection (9th Ave and W 44th St)</li>
+                    <li>Mama Mia (on the right across the intersection)</li>
+                    <li>Chipotle</li>
+                    <li>Marseille (on the left after turning)</li>
+                    <li>Endpoint 3</li>
+                    <li>Tavern</li>
+                    <li>Vanilla Gorilla (blue colored)</li>
+                    <li>Endpoint 2</li>
                     <li>End (G)</li>
                 </ul>
             </div>
@@ -183,25 +110,24 @@
     <div class="quiz-visuals">
     <!-- Quiz map -->
     <div class="quiz-map">
-        <img src="{{ url_for('static', filename='images/Boston Map Sketch.jpg') }}" 
+        <img src="{{ url_for('static', filename='images/sketched_map_2804_cropped.jpg') }}" 
             alt="Example sketch map"
             class="quiz-img">
     </div>
 
     <!-- Observations carousel -->
     <div class="quiz-observations">
-        <video
-            id="example-obs-video"
-            width="100%"
-            controls
-            preload="metadata"
-        >
-            <source src="{{ url_for('serve_video', filename='rid_72.mp4') }}" type="video/mp4">
-        </video>
+        <img id="quiz-obs-img" 
+            alt="Quiz observation"
+            class="quiz-img">
+        <div style="margin-top:0.5rem; text-align:center;">
+        <button id="quiz-prev-obs">Previous</button>
+        <button id="quiz-next-obs">Next</button>
+        </div>
     </div>
     </div>
     <div id="quiz-content">
-        <h3>Drag and drop Start, End, and Points A/B/C into the correct positions in the landmark sequence based on the map and order they are seen in the observations. Once you complete this quiz, you will be able to move onto the task.</h3>
+        <h3>Reorder the landmarks (drag and drop) into the correct sequence based on the map and order they are seen in the observations. Once you complete this quiz, you will be able to move onto the task.</h3>
         <ul id="quiz-landmark-list"></ul>
         <button id="submit-quiz-btn">Submit</button>
         <div id="quiz-feedback" style="margin-top:1rem;font-weight:bold;"></div>
@@ -213,10 +139,6 @@
     <div id="task-page" class="page">
         <div id="user-info" style="margin-bottom: 1em; font-weight: bold;">
             User ID: {{ user_id }}, Study ID: {{ study_id }}
-        </div>
-
-        <div id="route-indicator" style="font-weight: bold; margin-bottom: 0.5rem;">
-            Route 1 of 6
         </div>
 
         <button id="show-instructions-btn" style="margin-left:auto;">Show Instructions</button>
@@ -237,9 +159,11 @@
         <!-- Observations -->
         <div class="observations">
             <h2>Observations</h2>
-            <video id="obs-video" controls preload="metadata" width="800">
-                <source id="obs-video-src" type="video/mp4">
-            </video>
+            <img id="obs-image" alt="Observation">
+            <div style="margin-top:1rem;">
+                <button id="prev-obs">Previous Image</button>
+                <button id="next-obs">Next Image</button>
+            </div>
         </div>
 
         <!-- Drawing Board -->
@@ -309,7 +233,7 @@
             <label for="landmark-list">
                 Please list all the landmarks you included in your drawing in the order they are seen in the observations.  
                 <br>
-                You must include Start (S), Goal (G), and Points A/B/C.
+                Below are some suggested landmarks that you can overwrite, reorder, or delete.
             </label>
             <ul id="landmark-list">
                 <!-- Landmarks will be injected dynamically via JS -->
@@ -323,24 +247,9 @@
         <button type="button" id="save-btn">Save & Next</button>
     </div>
 
-    <!-- Screenout Page -->
-    <div id="screenout-page" class="page">
-    <h1>Thank you for your time</h1>
-
-    <p>
-        Unfortunately, you were not able to pass the short quiz after the maximum number of attempts,
-        so you cannot continue this study.
-    </p>
-    
-    <p style="margin-top: 1rem; font-size: 0.95rem; opacity: 0.8;">
-        If you believe this is an error, please return the submission on Prolific and contact the researcher.
-    </p>
-    </div>
-
     <!-- Done Page -->
     <div id="done-page" class="page">
-        <h2>Submitting your responses…</h2>
-        <p>You will be redirected to Prolific automatically.</p>
+        <!-- unchanged content -->
     </div>
 
     <script src="{{ url_for('static', filename='js/app.js') }}" defer></script>

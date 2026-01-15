@@ -1,0 +1,63 @@
+[
+  {
+    "task_id": 41,
+    "landmarks": [
+      "Start (S)",
+      "Green Park left side",
+      "Point B",
+      "Crosswalk intersection",
+      "Point C",
+      "White Tall Building Gold Top",
+      "Double Cross walk",
+      "Point A",
+      "Goal (G)",
+      "End"
+    ],
+    "timestamp": "2025-12-30T14:36:03.299585+00:00"
+  },
+  {
+    "task_id": 42,
+    "landmarks": [
+      "Start (S)",
+      "Boston Green Park",
+      "Bank",
+      "Spruce street",
+      "Point C",
+      "Oneida Tablet",
+      "Point B",
+      "Street",
+      "Point A",
+      "Cross walk intersection",
+      "Goal(G)",
+      "End"
+    ],
+    "timestamp": "2025-12-30T14:58:19.042962+00:00"
+  },
+  {
+    "task_id": 43,
+    "landmarks": [
+      "Start (S)",
+      "Cross Walk intersection 1",
+      "Cross Walk intersection 2",
+      "Cross Walk intersection 3",
+      "Point B",
+      "Cross Walk intersection 4",
+      "Cross Walk intersection 5",
+      "Cross Walk intersection 6",
+      "Cross Walk intersection 7",
+      "Point C",
+      "Cross Walk intersection 8",
+      "Cross Walk intersection 9",
+      "Tall Buildings",
+      "Cross Walk intersection 10",
+      "Cross Walk intersection 11",
+      "White Building",
+      "Point A",
+      "Cross Walk intersection 12",
+      "Cross Walk intersection 13",
+      "Goal (G)",
+      "End"
+    ],
+    "timestamp": "2025-12-30T15:27:16.761994+00:00"
+  }
+]

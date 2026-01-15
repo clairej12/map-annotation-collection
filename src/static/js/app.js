@@ -5,6 +5,8 @@ const BASE = ""; // set to "" if running on localhost
 const STORAGE_KEY = "napkinMapSurveyState";
 const AUTOSAVE_INTERVAL_MS = 10000;
 const UNDO_LIMIT = 10;
+const MAX_QUIZ_ATTEMPTS = 3;
+const PROLIFIC_SCREENOUT_URL = "https://app.prolific.com/submissions/complete?cc=C170KQM0"
 
 /* ---------------- In-memory state ---------------- */
 let batch = [], savedAns = {};
@@ -16,13 +18,44 @@ let state = {
   batch: [],
   savedAns: {},
   tIdx: 0,
-  obsIdxPerTask: {}, // map task_id -> obs idx
-  drawings: {},      // map task_id -> base64 image (finalized)
+
+  // VIDEO STATE
+  videoState: {
+    // task_id -> { currentTime, paused }
+  },
+
+  prolific: {
+    initialized: false  
+  },
+
+  quiz: {
+    attempts: 0,
+    passed: false,
+    screened_out: false
+  },
+
+  drawings: {},        // map task_id -> base64 image (finalized)
   drawing_paths: {},
-  landmarks: {}      // map task_id -> array of strings
+  landmarks: {},        // map task_id -> array of strings
+  metricsByTask: {},   // <-- ADD
+  textBoxesByTask: {}, 
 };
 
 // Restore from localStorage
+function normalizeState() {
+  state.prolific = state.prolific || { initialized: false };
+  state.quiz = state.quiz || { attempts: 0, passed: false, screened_out: false };
+  state.videoState = state.videoState || {};
+  state.metricsByTask = state.metricsByTask || {};   // <-- ADD
+  state.drawings = state.drawings || {};
+  state.drawing_paths = state.drawing_paths || {};
+  state.landmarks = state.landmarks || {};
+  state.batch = state.batch || [];
+  state.savedAns = state.savedAns || {};
+  state.textBoxesByTask = state.textBoxesByTask || {};
+  if (typeof state.tIdx !== "number") state.tIdx = 0;
+  if (!state.currentPage) state.currentPage = "instr-page";
+}
 
 // ------------------ Restore State ------------------
 document.addEventListener("DOMContentLoaded", async () => {
@@ -31,32 +64,94 @@ document.addEventListener("DOMContentLoaded", async () => {
     const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
     console.log("Restored state:", saved);
     if (saved) Object.assign(state, saved);
+    normalizeState();
   } catch (e) {
     console.warn("Could not parse saved state:", e);
   }
 
+  // ---- then merge Prolific params into state ----
+  await hydrateProlificFromServer();
+
+  if (!state.prolific?.pid) {
+    console.log("URL query parameters:", getQueryParams());
+    alert("Missing Prolific ID. Please return to Prolific and relaunch the study.");
+    // Optional: stop here
+    return;
+  }
+
+  // Force start page on fresh Prolific entry
+  if (state._justEnteredFromProlific) {
+    console.log("Fresh Prolific entry → redirecting to instruction page");
+    state.currentPage = "instr-page";
+    delete state._justEnteredFromProlific; // one-time only
+    saveState();
+  }
+
+  // Show whatever page we were on last
   show(state.currentPage);
+
+  // Reattach batch / savedAns from state if present
+  if (Array.isArray(state.batch) && state.batch.length > 0) {
+    batch = state.batch;
+    savedAns = state.savedAns || {};
+  }
 
   console.log("Current page:", state.currentPage);
   console.log("State before restoration/initial load:", state);
+
   if (state.currentPage === "task-page") {
-    if (state.batch.length === 0) {
+    // Normal restore for drawing page
+    if (!Array.isArray(batch) || batch.length === 0) {
       console.log("No batch loaded, fetching next batch...");
       await fetchBatch();
-    } else {
-      console.log("Restoring existing batch from state");
       batch = state.batch;
       savedAns = state.savedAns || {};
     }
     renderTask();
     startAutoSave();
+
+  } else if (state.currentPage === "landmark-page") {
+    // NEW: restore when reloading on landmarks page
+    if (!Array.isArray(batch) || batch.length === 0) {
+      console.log("No batch loaded, fetching next batch...");
+      await fetchBatch();
+      batch = state.batch;
+      savedAns = state.savedAns || {};
+    }
+
+    // Make sure tIdx is in range
+    if (state.tIdx < 0 || state.tIdx >= batch.length) {
+      state.tIdx = 0;
+    }
+    const t = batch[state.tIdx];
+
+    // Ensure we have landmarks in state; fall back to defaults from backend
+    if (!state.landmarks[t.task_id] || state.landmarks[t.task_id].length === 0) {
+      state.landmarks[t.task_id] = [...t.landmarks];
+    }
+
+    // Render landmark list from state
+    renderLandmarksUI(t);
+
+    // Restore saved sketch into the image on the landmark page
+    const savedImgEl = document.getElementById("saved-drawing-img");
+    if (savedImgEl) {
+      savedImgEl.src = BASE + (state.drawing_paths[t.task_id] || "");
+    }
+
+    // Re-init timers / autosave for this task
+    startTaskTimer();      // drawing start (approx; we don't know original)
+    startLandmarkTimer();  // landmark timer from now
+    startAutoSave();
   }
+
   console.log("State after restoration/initial load:", state);
 });
 
-// ------------------ Clear Local State (Dev only) ------------------
-document.addEventListener("keydown", e => {
-  if (e.key === "r" && e.ctrlKey) {
+// ------------------ Clear Local State (Dev only) + Dev Shortcuts ------------------
+document.addEventListener("keydown", async e => {
+  // Dev: clear local state (Ctrl + R)
+  if (e.ctrlKey && !e.shiftKey && e.key.toLowerCase() === "r") {
     localStorage.removeItem(STORAGE_KEY);
     state = {
       currentPage: "instr-page",
@@ -66,79 +161,225 @@ document.addEventListener("keydown", e => {
       obsIdxPerTask: {}, // map task_id -> obs idx
       drawings: {},      // map task_id -> base64 image (finalized)
       drawing_paths: {},
-      landmarks: {}      // map task_id -> array of strings
+      landmarks: {},      // map task_id -> array of strings
     };
-
     alert("Local state cleared");
+    return;
+  }
+
+  // Dev: skip screening quiz (Ctrl + Shift + S) when on quiz page
+  if (
+    e.ctrlKey &&
+    e.shiftKey &&
+    e.key.toLowerCase() === "s" &&
+    state.currentPage === "quiz-page"
+  ) {
+    e.preventDefault();
+    await devSkipQuiz();
   }
 });
 
 // ------------------ Save State ------------------
 function saveState() {
   console.log("Saving state to localStorage:", state);
-  if (batch.length === 0) {
-    console.log("No batch loaded, skipping saveState.");
-    return;
-  }
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
 }
 
+// ------------------ Prolific ------------------
+function getQueryParams() {
+  const params = {};
+  const search = window.location.search.substring(1);
+  for (const part of search.split("&")) {
+    if (!part) continue;
+    const [key, val] = part.split("=");
+    params[decodeURIComponent(key)] = decodeURIComponent(val || "");
+  }
+  return params;
+}
+
+async function hydrateProlificFromServer() {
+  try {
+    const res = await fetch("/api/whoami", { credentials: "same-origin" });
+    if (!res.ok) return;
+    const me = await res.json();
+
+    state.prolific = state.prolific || {};
+
+    if (me.prolific_pid) state.prolific.pid = me.prolific_pid;
+    if (me.prolific_study_id) state.prolific.study_id = me.prolific_study_id;
+    if (me.prolific_session_id) state.prolific.session_id = me.prolific_session_id;
+
+    // 👇 mark first successful hydrate
+    if (!state.prolific.initialized && me.prolific_pid) {
+      state.prolific.initialized = true;
+      state._justEnteredFromProlific = true; // transient flag
+    }
+
+    saveState();
+  } catch (e) {
+    console.warn("Could not hydrate prolific from server:", e);
+  }
+}
 
 // ------------------ Show Page ------------------
 function show(pageId) {
-  ["instr-page", "quiz-page", "task-page", "done-page"].forEach(id =>
-    document.getElementById(id).classList.remove("active")
-  );
-  document.getElementById(pageId).classList.add("active");
+  ["instr-page", "quiz-page", "task-page", "landmark-page", "done-page", "screenout-page"].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.classList.remove("active");
+  });
+  const pageEl = document.getElementById(pageId);
+  if (pageEl) pageEl.classList.add("active");
+
   state.currentPage = pageId;
   saveState();
 }
 
-// ------------------ Render Example ----------------
-// Example observations carousel
-const exampleObsImages = [
-  "static/images/xULIC_eDnb4APnd71q9c3Q_209.18_sharpened.jpg",
-  "static/images/5ITG_G7VUaanqnDdpunTrw_209.1_sharpened.jpg",
-  "static/images/6yqplA8nA9Jhb1e_xVZGGQ_208.96_sharpened.jpg",
-  "static/images/0wE6axap7dj1qmn4rXTzVA_208.95_sharpened.jpg",
-  "static/images/3KqKKj1TmZuJEOZMdbxDFg_208.97_sharpened.jpg",
-  "static/images/O0VWr8ynRBO0GihRp_kwVg_202.72_sharpened.jpg",
-  "static/images/IaQdSIEo8zsIgnNuBrIqyQ_175.07_sharpened.jpg",
-  "static/images/lZ01djzqycDP2Q_pUPSCqw_141.32_sharpened.jpg",
-  "static/images/6_RBib5hDlQNlkHkTBRlGg_119.15_sharpened.jpg",
-  "static/images/EEr1fMxAX6pwCFgrbySEBQ_118.8_sharpened.jpg",
-  "static/images/Z1PbH8EiC_UbQfYWfXPxuQ_119.06_sharpened.jpg",
-  "static/images/xnrwjnSHt9S5lef9_3XwxA_119.07_sharpened.jpg",
-  "static/images/8wSeB1wzKHEEROwcOLtxnw_119.06_sharpened.jpg",
-  "static/images/eQyXeUJ3QleuTBdhJCkCmA_119.07_sharpened.jpg",
-  "static/images/svB62DOPbGvgZLrvNSH13g_119.08_sharpened.jpg",
-  "static/images/RCnAt06Z9YRq0adMJl7XqQ_119.08_sharpened.jpg",
-  "static/images/1bGX-jxd2jFltlLzppbi6w_119.09_sharpened.jpg",
-  "static/images/bpTD_75MjdoVxD39EZsavA_119.07_sharpened.jpg",
-  "static/images/WjMNYFMG6CnPoeJRdthNmA_119.08_sharpened.jpg",
-  "static/images/9eVUhdkTI_g2yIVGkgmcSA_119.07_sharpened.jpg",
-  "static/images/aopI6T9aoGnExvlurEHHAA_119.08_sharpened.jpg"
+// ------------------ Render Quiz ------------------
+// Example landmarks
+const exampleLandmarks = [
+  "Start (S)",
+  "First intersection with crosswalks",
+  "Second intersection with crosswalks",
+  "Point B",
+  "Third intersection with cross walks",
+  "Pass through fourth intersection with cross walks",
+  "Turn onto alleyway",
+  "Parking spots on either side of the street",
+  "Point C",
+  "Tall brick buildings on either side",
+  "Pass through fifth intersection with crosswalks",
+  "Turn onto Public Alley",
+  "Parking spots on either side of the street",
+  "Point A",
+  "Turn out of alleyway",
+  "Pass through sixth intersection with crosswalks",
+  "Pass seventh intersection with crosswalks",
+  "Park with grass and trees on either side of the street",
+  "Turn at eighth intersection with crosswalks",
+  "End (G)"
 ];
+const misorderedLandmarks = [
+  "First intersection with crosswalks",
+  "Second intersection with crosswalks",
+  "Third intersection with cross walks",
+  "Pass through fourth intersection with cross walks",
+  "Turn onto alleyway",
+  "Parking spots on either side of the street",
+  "Tall brick buildings on either side",
+  "Pass through fifth intersection with crosswalks",
+  "Turn onto Public Alley",
+  "Parking spots on either side of the street",
+  "Turn out of alleyway",
+  "Pass through sixth intersection with crosswalks",
+  "Pass seventh intersection with crosswalks",
+  "Park with grass and trees on either side of the street",
+  "Turn at eighth intersection with crosswalks",
+  "Point C",
+  "Point B",
+  "Point A",
+  "Start (S)",
+  "End (G)"
+];
+// Render shuffled landmarks into quiz list
+function renderQuizLandmarks() {
+  const quizList = document.getElementById("quiz-landmark-list");
+  quizList.innerHTML = "";
+  misorderedLandmarks.forEach(text => {
+    const li = document.createElement("li");
+    li.textContent = text;
+    li.draggable = true;
+    quizList.appendChild(li);
+  });
+}
+renderQuizLandmarks();
 
-let exampleObsIdx = 0;
-const exampleObsImg = document.getElementById("example-obs-img");
-exampleObsImg.src = exampleObsImages[exampleObsIdx];
+// Drag & drop behavior
+let draggedItem = null;
 
-document.getElementById("example-prev-obs").onclick = () => {
-    exampleObsIdx = Math.max(exampleObsIdx - 1, 0);
-    exampleObsImg.src = exampleObsImages[exampleObsIdx];
-    taskMetrics.clicks.prevObs += 1;
+document.addEventListener("dragstart", e => {
+  if (e.target.tagName === "LI") {
+    draggedItem = e.target;
+    e.target.style.opacity = "0.5";
+  }
+});
+
+document.addEventListener("dragend", e => {
+  if (e.target.tagName === "LI") {
+    draggedItem.style.opacity = "";
+    draggedItem = null;
+  }
+});
+
+document.addEventListener("dragover", e => {
+  e.preventDefault();
+  const quizList = document.getElementById("quiz-landmark-list");
+  if (e.target.tagName === "LI" && quizList.contains(e.target)) {
+    const rect = e.target.getBoundingClientRect();
+    const offset = e.clientY - rect.top;
+    if (offset > rect.height / 2) {
+      e.target.parentNode.insertBefore(draggedItem, e.target.nextSibling);
+    } else {
+      e.target.parentNode.insertBefore(draggedItem, e.target);
+    }
+  }
+});
+
+document.getElementById("submit-quiz-btn").onclick = async () => {
+  const quizList = document.querySelectorAll("#quiz-landmark-list li");
+  const order = Array.from(quizList).map(li => li.textContent);
+
+  try {
+    const res = await fetch("/check_quiz", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ order })
+    });
+
+    const data = await res.json();
+
+    if (data.correct) {
+      // ✅ Passed
+      state.quiz.passed = true;
+      saveState();
+
+      await fetchBatch();
+      renderTask();
+      show("task-page");
+      startAutoSave();
+      return;
+    }
+
+    // ❌ Failed attempt
+    state.quiz.attempts = (state.quiz.attempts || 0) + 1;
+    saveState();
+
+    const remaining = MAX_QUIZ_ATTEMPTS - state.quiz.attempts;
+
+    if (remaining <= 0) {
+      // Too many failures → screen out + redirect
+      screenOutParticipant("failed_quiz");
+    } else {
+      alert(`That order is not correct. Please try again. (${remaining} attempt(s) left)`);
+    }
+
+  } catch (err) {
+    console.error("Quiz check failed:", err);
+    alert("Sorry, something went wrong checking your answer.");
+  }
 };
-document.getElementById("example-next-obs").onclick = () => {
-    exampleObsIdx = Math.min(exampleObsIdx + 1, exampleObsImages.length - 1);
-    exampleObsImg.src = exampleObsImages[exampleObsIdx];
-    taskMetrics.clicks.nextObs += 1;
-};
 
-document.onkeydown = e => {
-    if (e.key === "ArrowLeft") document.getElementById("example-prev-obs").click();
-    if (e.key === "ArrowRight") document.getElementById("example-next-obs").click();
-  };
+function screenOutParticipant(reason = "failed_quiz") {
+  state.quiz.screened_out = true;
+  state.quiz.screenout_reason = reason;
+  saveState();
+
+  // Show a friendly page for ~0.5s (optional), then redirect
+  show("screenout-page");
+
+  // setTimeout(() => {
+  //   window.location.href = PROLIFIC_SCREENOUT_URL;
+  // }, 500);
+}
 
 // ------------------ Fetch Batch ------------------
 async function fetchBatch() {
@@ -172,8 +413,38 @@ async function fetchBatch() {
   }
 }
 
-// ------------------ Begin Button ------------------
+// ------------------ DEV: Skip Quiz Shortcut ------------------
+async function devSkipQuiz() {
+  console.log("[DEV] Skipping quiz via keyboard shortcut");
+
+  try {
+    // Ensure we have a batch
+    if (!Array.isArray(batch) || batch.length === 0) {
+      await fetchBatch();
+    } else {
+      // Make sure our globals line up with state
+      batch = state.batch || batch;
+      savedAns = state.savedAns || savedAns;
+    }
+
+    // Go straight to task page
+    renderTask();
+    show("task-page");
+    startAutoSave();
+  } catch (err) {
+    console.error("[DEV] Failed to skip quiz:", err);
+    alert("Dev skip failed: could not load tasks.");
+  }
+}
+
 document.getElementById("begin-btn").onclick = async () => {
+  // If quiz is enabled and not passed, go to quiz
+  if (!state.quiz?.passed) {
+    show("quiz-page");
+    return;
+  }
+
+  // Otherwise go straight to tasks
   try {
     await fetchBatch();
     renderTask();
@@ -214,15 +485,76 @@ toggleBtn.onclick = () => {
 
 
 // ------------------ Render Task ------------------
-let currentObsIdx = 0;
-
 // Drawing undo/redo stacks per task (in-memory)
 const undoStacks = {}; // task_id -> [ImageData]
 const redoStacks = {}; // task_id -> [ImageData]
 
-function initTaskMetrics() {
-  taskMetrics = { startTime: performance.now(), clicks: {} };
-  startTaskTimer();
+// ------------------ Metrics Per Task ------------------
+function ensureMetricsStore() {
+  state.metricsByTask = state.metricsByTask || {}; // task_id -> metrics object
+}
+
+function initTaskMetricsFor(taskId) {
+  ensureMetricsStore();
+  if (!state.metricsByTask[taskId]) {
+    const now = performance.now();
+    state.metricsByTask[taskId] = {
+      timing: {
+        pageEnterMs: now,
+        firstInteractionMs: null,
+        drawingDurationMs: null,
+        landmarkEnterMs: null,
+        landmarkDurationMs: null
+      },
+      video: {
+        playCount: 0,
+        pauseCount: 0,
+        seekCount: 0,
+        totalWatchTimeMs: 0,
+        lastPlayStartedMs: null,
+        maxWatchedTime: 0
+      },
+      interactions: {
+        clickedGoToLandmarksMs: null,
+        clickedSaveNextMs: null,
+        addLandmark: 0,
+        deleteLandmark: 0,
+        reorderLandmark: 0,
+        undo: 0,
+        redo: 0
+      },
+      drawing: {
+        strokeCount: 0,
+        firstStrokeMs: null,
+        lastStrokeMs: null,
+        // store a capped list of points for entropy
+        points: [] // [{x, y}] in canvas coords
+      }
+    };
+    saveState();
+  }
+  return state.metricsByTask[taskId];
+}
+
+function getTaskMetrics(taskId) {
+  return initTaskMetricsFor(taskId);
+}
+
+function recordFirstInteraction(taskId) {
+  const m = getTaskMetrics(taskId);
+  if (m.timing.firstInteractionMs == null) {
+    m.timing.firstInteractionMs = performance.now();
+    saveState();
+  }
+}
+
+function finalizeWatchIfPlaying(taskId) {
+  const m = getTaskMetrics(taskId);
+  if (m.video.lastPlayStartedMs != null) {
+    m.video.totalWatchTimeMs += performance.now() - m.video.lastPlayStartedMs;
+    m.video.lastPlayStartedMs = null;
+    saveState();
+  }
 }
 
 function renderTask(){
@@ -230,95 +562,348 @@ function renderTask(){
     console.warn("renderTask called too early—batch not loaded");
     return;
   }
-  initTaskMetrics();
 
   const t = batch[state.tIdx];
+  if (!t) return;
+
+  // Ensure per-task metrics exist (DO NOT overwrite)
+  getTaskMetrics(t.task_id);
 
   // Map
   document.getElementById("map-img").src = BASE + t.map_url;
   console.log("Map loaded from:", BASE + t.map_url);
-  
-  // Observations
-  currentObsIdx = state.obsIdxPerTask[t.task_id] || 0;
-  console.log("Current observation index:", currentObsIdx);
-  renderObsImage(t);
 
-  document.getElementById("prev-obs").onclick = () => {
-    if (currentObsIdx > 0) {
-      currentObsIdx--;
-      state.obsIdxPerTask[t.task_id] = currentObsIdx;
-      renderObsImage(t);
-    }
-  };
-
-  document.getElementById("next-obs").onclick = () => {
-    if (currentObsIdx < t.images.length - 1) {
-      currentObsIdx++;
-      state.obsIdxPerTask[t.task_id] = currentObsIdx;
-      renderObsImage(t);
-    }
-  };
-
-  // Keyboard nav
-  document.onkeydown = e => {
-    if (e.key === "ArrowLeft") document.getElementById("prev-obs").click();
-    if (e.key === "ArrowRight") document.getElementById("next-obs").click();
-  };
+  // Video
+  console.log("Loading video for task:", t.task_id);
+  renderObsVideo(t);
 
   // Drawing pad
   initCanvas(t);
 
-  // Update buttons
+  // Buttons
   updateSaveButtons();
 }
 
+function updateRouteIndicator() {
+  const el = document.getElementById("route-indicator");
+  if (!el || !batch || batch.length === 0) return;
+  el.textContent = `Route ${state.tIdx + 1} of ${batch.length}`;
+}
+
 // ------------------ Render Observations ------------------
-function renderObsImage(t) {
-  console.log("getting observation from: ", BASE)
-  document.getElementById("obs-image").src = BASE + t.images[currentObsIdx];
+function renderObsVideo(t) {
+  const video = document.getElementById("obs-video");
+  const source = document.getElementById("obs-video-src");
+  const url = BASE + "/videos/" + t.video;
+
+  video.controls = true;
+  video.preload = "metadata";
+
+  state.videoState = state.videoState || {};
+  ensureMetricsStore();
+
+  const curSrc = source.getAttribute("src") || source.src || "";
+
+  // If switching away from a previous task while playing, finalize watch time
+  const prevTaskId = video.getAttribute("data-task-id");
+  if (prevTaskId && prevTaskId !== t.task_id) {
+    finalizeWatchIfPlaying(prevTaskId);
+
+    state.videoState[prevTaskId] = state.videoState[prevTaskId] || { currentTime: 0, paused: true };
+    state.videoState[prevTaskId].currentTime = video.currentTime || 0;
+    state.videoState[prevTaskId].paused = video.paused;
+    saveState();
+  }
+
+  // If same video already loaded, ensure handlers and restore state
+  if (curSrc === url) {
+    attachVideoStateHandlers(video, t.task_id);
+    return;
+  }
+
+  // Switch source
+  video.setAttribute("data-task-id", t.task_id);
+  source.setAttribute("src", url);
+  video.load();
+
+  attachVideoStateHandlers(video, t.task_id);
+
+  // Restore time once metadata is ready
+  const saved = state.videoState[t.task_id];
+  video.onloadedmetadata = () => {
+    if (saved && saved.currentTime != null) {
+      const desired = saved.currentTime || 0;
+      const maxT = isFinite(video.duration) ? Math.max(0, video.duration - 0.25) : desired;
+      video.currentTime = Math.min(desired, maxT);
+
+      if (saved.paused === false) {
+        video.play().catch(() => {});
+      }
+    }
+  };
+
   saveState();
+}
+
+function attachVideoStateHandlers(video, taskId) {
+  // Avoid stacking handlers
+  if (video._videoStateHandlersFor === taskId) return;
+  video._videoStateHandlersFor = taskId;
+
+  state.videoState = state.videoState || {};
+  state.videoState[taskId] = state.videoState[taskId] || { currentTime: 0, paused: true };
+
+  const m = getTaskMetrics(taskId);
+
+  let lastSavedAtMs = 0;
+  const SAVE_EVERY_MS = 750;
+
+  const saveNow = () => {
+    state.videoState[taskId].currentTime = video.currentTime || 0;
+    state.videoState[taskId].paused = video.paused;
+    saveState();
+  };
+
+  video.ontimeupdate = () => {
+    const now = performance.now();
+    m.video.maxWatchedTime = Math.max(m.video.maxWatchedTime, video.currentTime || 0);
+
+    if (now - lastSavedAtMs >= SAVE_EVERY_MS) {
+      lastSavedAtMs = now;
+      saveNow();
+    }
+  };
+
+  video.onplay = () => {
+    recordFirstInteraction(taskId);
+    m.video.playCount += 1;
+    m.video.lastPlayStartedMs = performance.now();
+    state.videoState[taskId].paused = false;
+    saveState();
+  };
+
+  video.onpause = () => {
+    m.video.pauseCount += 1;
+    finalizeWatchIfPlaying(taskId);
+    state.videoState[taskId].paused = true;
+    saveNow();
+  };
+
+  video.onseeked = () => {
+    m.video.seekCount += 1;
+    recordFirstInteraction(taskId);
+    saveState();
+  };
+
+  video.onended = () => {
+    finalizeWatchIfPlaying(taskId);
+    state.videoState[taskId].currentTime = 0;
+    state.videoState[taskId].paused = true;
+    saveState();
+  };
 }
 
 // ------------------ Map Zoom on Click ------------------
 window.addEventListener("DOMContentLoaded", () => {
-  const container = document.getElementById("map-container");
   const openMapBtn = document.getElementById("open-map-btn");
-  const mapOverlay = document.getElementById("map-modal");
-  const img       = document.getElementById("map-img");
-  const closeBtn  = document.getElementById("map-close-btn");
-  const hideBtn = document.getElementById("map-hide-btn");
+  const mapModal   = document.getElementById("map-modal");
+  const img        = document.getElementById("map-img");
+  const hideBtn    = document.getElementById("map-hide-btn");
 
-  if (openMapBtn) {
-    // Clicking the open button shows the overlay
-    openMapBtn.addEventListener("click", () => {
-      mapOverlay.classList.add("visible");
-    });
+  if (!openMapBtn || !mapModal || !img || !hideBtn) return;
 
-    // Clicking the close button hides the overlay
-    hideBtn.addEventListener("click", () => {
-      mapOverlay.classList.remove("visible");
-    });
+  const ZOOM = 2;            // <-- smaller zoom; try 1.25–1.6
+  const DRAG_THRESHOLD_PX = 6;  // <-- 5–10
+
+  let scale = 1;
+  let tx = 0, ty = 0;
+  let isDragging = false;
+  let moved = false;
+  let startX = 0, startY = 0;
+  let startTx = 0, startTy = 0;
+
+  // Make sure the image is pannable when transformed
+  img.style.transformOrigin = "center center";
+  img.style.cursor = "zoom-in";
+
+  function applyTransform() {
+    img.style.transform = `translate(${tx}px, ${ty}px) scale(${scale})`;
   }
 
-  if (closeBtn) {
-    // Clicking the image zooms in
-    img.addEventListener("click", () => {
-      container.classList.add("zoomed");
-    });
-
-    // Clicking the X zooms back out
-    closeBtn.addEventListener("click", () => {
-      container.classList.remove("zoomed");
-    });
+  function isOpen() {
+    return mapModal.classList.contains("visible");
   }
+
+  function isZoomed() {
+    return mapModal.classList.contains("zoomed");
+  }
+
+  function clampPan() {
+    // Clamp based on the scaled image size vs modal size.
+    // Use natural size * scale (more stable than getBoundingClientRect during transforms)
+    const vw = mapModal.clientWidth;
+    const vh = mapModal.clientHeight;
+
+    const naturalW = img.naturalWidth || vw;
+    const naturalH = img.naturalHeight || vh;
+
+    // Fit image "contain" into modal (approx)
+    const fitScale = Math.min(vw / naturalW, vh / naturalH);
+    const displayedW = naturalW * fitScale * scale;
+    const displayedH = naturalH * fitScale * scale;
+
+    const extraX = Math.max(0, (displayedW - vw) / 2);
+    const extraY = Math.max(0, (displayedH - vh) / 2);
+
+    tx = Math.max(-extraX, Math.min(extraX, tx));
+    ty = Math.max(-extraY, Math.min(extraY, ty));
+  }
+
+  function setZoom(on) {
+    mapModal.classList.toggle("zoomed", on);
+    scale = on ? ZOOM : 1;
+    if (!on) { tx = 0; ty = 0; }
+    img.style.cursor = on ? "grab" : "zoom-in";
+    applyTransform();
+    requestAnimationFrame(() => { clampPan(); applyTransform(); });
+  }
+
+  // ---------- OPEN / CLOSE MODAL ----------
+  openMapBtn.addEventListener("click", () => {
+    mapModal.classList.add("visible");
+    setZoom(false);          // reset when opening
+    moved = false;
+  });
+
+  hideBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    mapModal.classList.remove("visible");
+    setZoom(false);
+    moved = false;
+  });
+
+  // Optional: click dark backdrop closes (but NOT when clicking image)
+  mapModal.addEventListener("click", (e) => {
+    if (e.target === mapModal) {
+      mapModal.classList.remove("visible");
+      setZoom(false);
+      moved = false;
+    }
+  });
+
+  // ---------- CLICK TO TOGGLE ZOOM (but suppress after drag) ----------
+  img.addEventListener("click", (e) => {
+    if (!isOpen()) return;
+
+    if (moved) {
+      // this click was actually a drag-release click
+      e.preventDefault();
+      e.stopPropagation();
+      moved = false;
+      return;
+    }
+    setZoom(!isZoomed());
+  });
+
+  // ---------- PAN (mouse) ----------
+  img.addEventListener("mousedown", (e) => {
+    if (!isOpen() || !isZoomed()) return;
+    isDragging = true;
+    moved = false;
+
+    startX = e.clientX; startY = e.clientY;
+    startTx = tx; startTy = ty;
+
+    img.style.cursor = "grabbing";
+    e.preventDefault();
+  });
+
+  window.addEventListener("mousemove", (e) => {
+    if (!isDragging) return;
+
+    const dx = e.clientX - startX;
+    const dy = e.clientY - startY;
+
+    if (!moved && (Math.abs(dx) > DRAG_THRESHOLD_PX || Math.abs(dy) > DRAG_THRESHOLD_PX)) {
+      moved = true;
+    }
+
+    tx = startTx + dx;
+    ty = startTy + dy;
+    clampPan();
+    applyTransform();
+  });
+
+  window.addEventListener("mouseup", () => {
+    if (!isDragging) return;
+    isDragging = false;
+    if (isZoomed()) img.style.cursor = "grab";
+    // leave `moved` true; the subsequent click handler will clear it
+  });
+
+  // ---------- PAN (touch) ----------
+  img.addEventListener("touchstart", (e) => {
+    if (!isOpen() || !isZoomed()) return;
+    if (e.touches.length !== 1) return;
+
+    isDragging = true;
+    moved = false;
+
+    startX = e.touches[0].clientX;
+    startY = e.touches[0].clientY;
+    startTx = tx; startTy = ty;
+  }, { passive: true });
+
+  img.addEventListener("touchmove", (e) => {
+    if (!isDragging) return;
+    if (e.touches.length !== 1) return;
+
+    const dx = e.touches[0].clientX - startX;
+    const dy = e.touches[0].clientY - startY;
+
+    if (!moved && (Math.abs(dx) > DRAG_THRESHOLD_PX || Math.abs(dy) > DRAG_THRESHOLD_PX)) {
+      moved = true;
+    }
+
+    tx = startTx + dx;
+    ty = startTy + dy;
+    clampPan();
+    applyTransform();
+
+    // prevent the page from scrolling while panning the image
+    e.preventDefault();
+  }, { passive: false });
+
+  img.addEventListener("touchend", () => {
+    isDragging = false;
+    // moved will be cleared by the click handler on tap; for touch, this is fine.
+  });
 });
 
 // ------------------ Landmarks UI ------------------
+
+// Default scaffold used when a task has no saved landmarks yet
+const DEFAULT_LANDMARK_SCAFFOLD = [
+  "Start (S)",
+  "Point A",
+  "Point B",
+  "Point C",
+  "End (G)"  
+];
+
 function renderLandmarksUI(t) {
   const lmList = document.getElementById("landmark-list");
   lmList.innerHTML = "";
 
-  const taskLandmarks = state.landmarks[t.task_id] || [...t.landmarks];
+  // If we've already edited this task before, use what's in state.
+  // Otherwise, start from the default scaffold.
+  let taskLandmarks = state.landmarks[t.task_id];
+
+  if (!taskLandmarks || !taskLandmarks.length) {
+    // First time on this task → use default scaffold
+    taskLandmarks = [...DEFAULT_LANDMARK_SCAFFOLD];
+  }
+
   state.landmarks[t.task_id] = taskLandmarks;
 
   taskLandmarks.forEach((lm, idx) => {
@@ -341,7 +926,7 @@ function renderLandmarksUI(t) {
     delBtn.onclick = () => {
       taskLandmarks.splice(idx, 1);
       renderLandmarksUI(t);
-      taskMetrics.clicks.delLmClick += 1;
+      taskMetrics.interactions.deleteLandmark += 1;
       saveState();
     };
 
@@ -356,7 +941,7 @@ function renderLandmarksUI(t) {
   addBtn.onclick = () => {
     taskLandmarks.push("");
     renderLandmarksUI(t);
-    taskMetrics.clicks.addLmClick += 1;
+    taskMetrics.interactions.addLandmark += 1;
     saveState();
   };
   lmList.appendChild(addBtn);
@@ -385,11 +970,31 @@ function renderLandmarksUI(t) {
         const [moved] = arr.splice(dragSrcIdx, 1);
         arr.splice(targetIdx, 0, moved);
         renderLandmarksUI(t);
-        taskMetrics.clicks.reorderLm += 1;
+        taskMetrics.interactions.reorderLandmark += 1;
         saveState();
       }
     });
   });
+}
+
+// Read the current landmarks from the DOM and sync into state.landmarks
+function getCurrentTaskLandmarks(t) {
+  // All editable landmark rows
+  const inputs = document.querySelectorAll("#landmark-list .lm-item input");
+
+  // If we for some reason don't find any inputs (e.g. DOM not rendered),
+  // fall back to whatever is in state.
+  if (!inputs.length) {
+    return state.landmarks[t.task_id] || [];
+  }
+
+  const landmarks = Array.from(inputs)
+    .map(inp => inp.value.trim())
+    .filter(text => text.length > 0); // ignore completely empty rows
+
+  state.landmarks[t.task_id] = landmarks;
+  saveState();
+  return landmarks;
 }
 
 // ------------------ Drawing Pad ------------------
@@ -418,15 +1023,17 @@ const undoBtn = document.getElementById("undo-btn");
 const redoBtn = document.getElementById("redo-btn");
 const ctx = canvas.getContext("2d");
 
-// Fixed export resolution (e.g. 2000x2000)
-const SAVE_WIDTH = 2000;
-const SAVE_HEIGHT = 2000;
-
 let prevMouseX = 0, prevMouseY = 0, snapshot = null;
 let isDrawing = false, hasDrawn = false;
 let selectedTool = "brush";
+
+// base size from slider
+let baseWidth = 5;
 let brushWidth = 5;
+let eraserWidth = 15;  // will be kept in sync with baseWidth
+
 let selectedColor = "#000";
+let drawingBoard = null;
 
 /* Helper to check if canvas is empty */
 function isCanvasBlank(c) {
@@ -438,38 +1045,39 @@ function isCanvasBlank(c) {
   return !pixelBuf.some(color => color !== 4294967295);
 }
 
-/* Resize canvas to CSS size */
-function resizeCanvasToDisplay() {
-  // Match CSS display size to parent
-  const displayWidth = canvas.clientWidth;
-  const displayHeight = canvas.clientHeight;
-
-  // Set internal resolution to save size
-  canvas.width = SAVE_WIDTH;
-  canvas.height = SAVE_HEIGHT;
-
-  // Scale the drawing context so mouse matches visual size
-  const scaleX = SAVE_WIDTH / displayWidth;
-  const scaleY = SAVE_HEIGHT / displayHeight;
+function getCanvasCssSize() {
+  const r = canvas.getBoundingClientRect();
+  return { w: r.width, h: r.height };
 }
 
+/* Resize canvas to CSS size */
+// Display canvas uses true screen size (no drift)
+function resizeCanvasToDisplay() {
+  const rect = canvas.getBoundingClientRect();
+  const dpr = window.devicePixelRatio || 1;
+
+  // Match internal buffer to what the user actually sees
+  canvas.width = Math.round(rect.width * dpr);
+  canvas.height = Math.round(rect.height * dpr);
+
+  // Draw in CSS pixel units (so mouse math is simple)
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+
+// Mouse position in CSS pixels (matches ctx after setTransform)
 function getMousePos(e) {
   const rect = canvas.getBoundingClientRect();
-  
-  // Scale mouse coords from CSS pixels to canvas buffer pixels
-  const scaleX = canvas.width / rect.width;
-  const scaleY = canvas.height / rect.height;
-  
   return {
-    x: (e.clientX - rect.left) * scaleX,
-    y: (e.clientY - rect.top) * scaleY
+    x: (e.clientX - rect.left),
+    y: (e.clientY - rect.top)
   };
 }
 
 /* Background */
 const setCanvasBackground = () => {
+  const { w, h } = getCanvasCssSize();
   ctx.fillStyle = "#fff";
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillRect(0, 0, w, h);
   ctx.fillStyle = selectedColor;
 };
 
@@ -485,14 +1093,28 @@ function pushUndo(task_id) {
   if (undoStacks[task_id].length > UNDO_LIMIT) undoStacks[task_id].shift();
   // clearing redo stack on new action
   redoStacks[task_id] = [];
+  
 }
 
 /* commit the current canvas to state.drawings as base64 */
 function commitDrawingSnapshotToState(task_id) {
-  if (!drawing && !isCanvasBlank(canvas)) {
+  if (!isCanvasBlank(canvas)) {
     state.drawings[task_id] = canvas.toDataURL("image/png");
   }
   saveState();
+}
+
+function commitCurrentDrawing(taskId) {
+  if (!taskId) return;
+
+  // 1) persist DOM → state
+  saveTextBoxesForTask(taskId);
+
+  // 2) snapshot canvas pixels (no flatten)
+  commitDrawingSnapshotToState(taskId);
+
+  // 3) (optional) keep UI consistent if anything re-rendered
+  // restoreTextBoxesForTask(taskId);
 }
 
 /* Undo / Redo handlers */
@@ -506,6 +1128,7 @@ function doUndo(task_id) {
   // restore last
   ctx.putImageData(last, 0, 0);
   commitDrawingSnapshotToState(task_id);
+  taskMetrics.interactions.undo += 1;
 }
 
 function doRedo(task_id) {
@@ -517,6 +1140,7 @@ function doRedo(task_id) {
   undoStacks[task_id].push(ctx.getImageData(0, 0, canvas.width, canvas.height));
   ctx.putImageData(next, 0, 0);
   commitDrawingSnapshotToState(task_id);
+  taskMetrics.interactions.redo += 1;
 }
 
 /* Primitive shape drawing helpers */
@@ -556,11 +1180,26 @@ const startDraw = (e) => {
   const pos = getMousePos(e);
   prevMouseX = pos.x;
   prevMouseY = pos.y;
-  ctx.lineWidth = brushWidth;
-  ctx.strokeStyle = (selectedTool === "eraser") ? "#fff" : selectedColor;
+
+  // Use thicker width for eraser
+  if (selectedTool === "eraser") {
+    ctx.lineWidth = eraserWidth;
+    ctx.strokeStyle = "#fff";
+  } else {
+    ctx.lineWidth = brushWidth;
+    ctx.strokeStyle = selectedColor;
+  }
+
   ctx.fillStyle = selectedColor;
   takeSnapshot();
   const t = batch[state.tIdx];
+  if (t && t.task_id) {
+    recordStrokeStart(t.task_id);
+    currentStrokePoints = []; // reset
+    // also log first point
+    const pos = getMousePos(e);
+    recordStrokePoint(t.task_id, pos.x, pos.y);
+  }
   if (t && t.task_id) {
     pushUndo(t.task_id);
   }
@@ -575,6 +1214,8 @@ const drawing = (e) => {
   if (snapshot) ctx.putImageData(snapshot, 0, 0);
 
   const pos = getMousePos(e);
+  const t = batch[state.tIdx];
+  if (t && t.task_id) recordStrokePoint(t.task_id, pos.x, pos.y);
 
   if (selectedTool === "brush" || selectedTool === "eraser") {
     ctx.strokeStyle = (selectedTool === "eraser") ? "#fff" : selectedColor;
@@ -591,11 +1232,215 @@ const drawing = (e) => {
   }
 };
 
+function ensureTextBoxStore(taskId) {
+  state.textBoxesByTask = state.textBoxesByTask || {};
+  state.textBoxesByTask[taskId] = state.textBoxesByTask[taskId] || [];
+  return state.textBoxesByTask[taskId];
+}
+
+function getCurrentTaskId() {
+  const t = batch?.[state.tIdx];
+  return t?.task_id || null;
+}
+
+function saveTextBoxesForTask(taskId) {
+  if (!taskId || !drawingBoard) return;
+
+  const canvasRect = canvas.getBoundingClientRect();
+
+  const boxes = Array.from(document.querySelectorAll(".text-box"));
+  const serialized = boxes.map((box) => {
+    const id =
+      box.dataset.tid ||
+      (crypto.randomUUID?.() || String(Date.now() + Math.random()));
+    box.dataset.tid = id;
+
+    const content = box.querySelector(".text-content");
+    const boxRect = box.getBoundingClientRect(); // ✅ missing in your version
+
+    // ✅ store position relative to CANVAS in CSS px
+    const left = boxRect.left - canvasRect.left;
+    const top  = boxRect.top  - canvasRect.top;
+
+    return { id, left, top, text: content ? content.innerText : "" };
+  });
+
+  state.textBoxesByTask[taskId] = serialized;
+  saveState();
+}
+
+function clearTextBoxesFromDOM() {
+  document.querySelectorAll(".text-box").forEach(b => b.remove());
+}
+
+function restoreTextBoxesForTask(taskId) {
+  if (!taskId || !drawingBoard) return;
+
+  clearTextBoxesFromDOM();
+
+  const saved = state.textBoxesByTask?.[taskId] || [];
+  saved.forEach(tb => {
+    createTextBox(tb.left, tb.top, { id: tb.id, text: tb.text, focus: false });
+  });
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+  drawingBoard = document.querySelector(".drawing-board");
+});
+
+function createTextBox(x, y, opts = {}) {
+  const taskId = getCurrentTaskId();
+
+  const boardRect = drawingBoard.getBoundingClientRect();
+  const canvasRect = canvas.getBoundingClientRect();
+
+  // ✅ convert canvas-relative coords into board-relative coords for positioning
+  const leftInBoard = (canvasRect.left - boardRect.left) + x;
+  const topInBoard  = (canvasRect.top  - boardRect.top)  + y;
+
+  const textBox = document.createElement("div");
+  textBox.className = "text-box";
+  textBox.style.left = `${leftInBoard}px`;
+  textBox.style.top  = `${topInBoard}px`;
+  textBox.dataset.tid = opts.id || (crypto.randomUUID?.() || String(Date.now() + Math.random()));
+
+  const textContent = document.createElement("div");
+  textContent.className = "text-content";
+  textContent.contentEditable = true;
+  textContent.spellcheck = false;
+  textContent.innerText = (opts.text != null ? opts.text : "Type here...");
+
+  const closeBtn = document.createElement("button");
+  closeBtn.type = "button";
+  closeBtn.className = "close-btn";
+  closeBtn.textContent = "✕";
+  closeBtn.onclick = () => {
+    textBox.remove();
+    if (taskId) saveTextBoxesForTask(taskId);
+  };
+
+  textBox.appendChild(textContent);
+  textBox.appendChild(closeBtn);
+  drawingBoard.appendChild(textBox);
+
+  // typing persistence (throttled)
+  let typingTimer = null;
+  textContent.addEventListener("input", () => {
+    clearTimeout(typingTimer);
+    typingTimer = setTimeout(() => {
+      if (taskId) saveTextBoxesForTask(taskId);
+    }, 250);
+  });
+
+  makeDraggable(textBox, () => {
+    if (taskId) saveTextBoxesForTask(taskId);
+  });
+
+  if (opts.focus !== false) textContent.focus();
+  return textBox;
+}
+
+function makeDraggable(el, onDragEnd) {
+  let offsetX = 0, offsetY = 0, isDragging = false;
+
+  el.addEventListener("mousedown", (e) => {
+    // Only drag when clicking the outer box (not when editing text)
+    if (e.target.closest(".text-content")) return;
+
+    isDragging = true;
+    const r = el.getBoundingClientRect();
+    offsetX = e.clientX - r.left;
+    offsetY = e.clientY - r.top;
+    el.style.cursor = "move";
+    e.preventDefault();
+  });
+
+  window.addEventListener("mousemove", (e) => {
+    if (!isDragging) return;
+
+    const boardRect = drawingBoard.getBoundingClientRect();
+    const canvasRect = canvas.getBoundingClientRect();
+    const boxRect = el.getBoundingClientRect();
+
+    let left = (e.clientX - boardRect.left) - offsetX;
+    let top  = (e.clientY - boardRect.top) - offsetY;
+
+    const canvasLeftInBoard = canvasRect.left - boardRect.left;
+    const canvasTopInBoard  = canvasRect.top  - boardRect.top;
+
+    const minLeft = canvasLeftInBoard;
+    const minTop  = canvasTopInBoard;
+    const maxLeft = canvasLeftInBoard + canvasRect.width  - boxRect.width;
+    const maxTop  = canvasTopInBoard  + canvasRect.height - boxRect.height;
+
+    left = Math.max(minLeft, Math.min(maxLeft, left));
+    top  = Math.max(minTop,  Math.min(maxTop,  top));
+
+    el.style.left = `${left}px`;
+    el.style.top  = `${top}px`;
+  });
+
+  window.addEventListener("mouseup", () => {
+    if (!isDragging) return;
+    isDragging = false;
+    el.style.cursor = "text";
+    if (typeof onDragEnd === "function") onDragEnd();
+  });
+}
+
+function snapshotCanvasToState(taskId) {
+  if (!isCanvasBlank(canvas)) {
+    state.drawings[taskId] = canvas.toDataURL("image/png");
+    saveState();
+  }
+}
+
+function exportPngWithText() {
+  const rect = canvas.getBoundingClientRect();
+  const scaleX = canvas.width / rect.width;
+  const scaleY = canvas.height / rect.height;
+
+  // offscreen canvas at SAME resolution as the real canvas buffer
+  const out = document.createElement("canvas");
+  out.width = canvas.width;
+  out.height = canvas.height;
+  const octx = out.getContext("2d");
+
+  // copy the drawn pixels
+  octx.drawImage(canvas, 0, 0);
+
+  // draw the text overlays
+  const boxes = document.querySelectorAll(".text-box");
+  boxes.forEach(box => {
+    const textEl = box.querySelector(".text-content");
+    if (!textEl) return;
+
+    const style = window.getComputedStyle(textEl);
+    const fontSize = parseFloat(style.fontSize) || 14;
+
+    octx.font = `${fontSize * scaleY}px ${style.fontFamily || "Arial"}`;
+    octx.fillStyle = style.color || "#000";
+    octx.textBaseline = "top";
+
+    const boxRect = box.getBoundingClientRect();
+    const x = (boxRect.left - rect.left) * scaleX;
+    const y = (boxRect.top - rect.top) * scaleY;
+
+    // multi-line support
+    const lines = (textEl.innerText || "").split("\n");
+    const lineH = (fontSize * scaleY) * 1.2;
+    lines.forEach((line, i) => octx.fillText(line, x, y + i * lineH));
+  });
+
+  return out.toDataURL("image/png");
+}
+
 const endDraw = (e) => {
   if (!isDrawing) return;
   isDrawing = false;
   // commit current drawing to state
   const t = batch[state.tIdx];
+  if (t && t.task_id) recordStrokeEnd(t.task_id);
   if (t && t.task_id) {
     commitDrawingSnapshotToState(t.task_id);
   }
@@ -614,7 +1459,11 @@ toolBtns.forEach(btn => {
 
 /* brush size */
 if (sizeSlider) {
-  sizeSlider.addEventListener("input", () => brushWidth = Number(sizeSlider.value));
+  sizeSlider.addEventListener("input", () => {
+    baseWidth = Number(sizeSlider.value) || 1;
+    brushWidth = baseWidth;          // pen size
+    eraserWidth = baseWidth * 10;     // eraser is 3× thicker (tune as you like)
+  });
 }
 
 /* color swatches and picker */
@@ -663,22 +1512,37 @@ if (redoBtn) redoBtn.addEventListener("click", () => {
 /* save image button (manual) */
 if (saveImgBtn) saveImgBtn.addEventListener("click", async () => {
   const t = batch[state.tIdx];
-  console.log("Save image button clicked");
   if (!t) return;
+
+  commitCurrentDrawing(t.task_id);
+
   if (isCanvasBlank(canvas)) {
     alert("You cannot save an empty board!");
     return;
   }
-  // Save to backend (drawing endpoint)
-  const result = await saveDrawingToBackend(t.task_id, canvas.toDataURL("image/png"));
-  state.drawing_paths[t.task_id] = result.file;
-  state.drawings[t.task_id] = canvas.toDataURL("image/png");
+
+  const png = exportPngWithText(); // ✅ includes DOM text boxes
+
+  const result = await saveDrawingToBackend(t.task_id, png);
+  if (result?.file) state.drawing_paths[t.task_id] = result.file;
+
+  // Keep editable snapshot in browser state (pixels only is fine)
   commitDrawingSnapshotToState(t.task_id);
   alert("Drawing saved.");
 });
 
 /* Canvas mouse events */
 canvas.addEventListener("mousedown", startDraw);
+canvas.addEventListener("mousedown", (e) => {
+  if (selectedTool === "text") {
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    createTextBox(x, y);
+    const taskId = getCurrentTaskId();
+    if (taskId) saveTextBoxesForTask(taskId);
+  }
+});
 canvas.addEventListener("mousemove", drawing);
 canvas.addEventListener("mouseup", endDraw);
 canvas.addEventListener("mouseleave", endDraw);
@@ -688,34 +1552,69 @@ window.addEventListener("load", () => {
   resizeCanvasToDisplay();
   setCanvasBackground();
 });
+
+let _resizeTimer = null;
+
 window.addEventListener("resize", () => {
-  // On resize, try to preserve current drawing by scaling existing image onto new size
-  const t = batch[state.tIdx];
-  const dataUrl = canvas.toDataURL();
-  resizeCanvasToDisplay();
-  const img = new Image();
-  img.onload = () => {
-    setCanvasBackground();
-    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-    if (t && t.task_id) commitDrawingSnapshotToState(t.task_id);
-  };
-  img.src = dataUrl;
+  clearTimeout(_resizeTimer);
+  _resizeTimer = setTimeout(() => {
+    const taskId = getCurrentTaskId();
+
+    // 1) Save current box positions relative to OLD canvas size
+    const oldRect = canvas.getBoundingClientRect();
+    if (taskId) saveTextBoxesForTask(taskId);
+
+    // 2) Snapshot canvas pixels (no flatten)
+    const dataUrl = canvas.toDataURL("image/png");
+
+    const img = new Image();
+    img.onload = () => {
+      // 3) Resize canvas
+      resizeCanvasToDisplay();
+
+      // 4) Redraw pixels
+      setCanvasBackground();
+      const { w, h } = getCanvasCssSize();
+      ctx.drawImage(img, 0, 0, w, h);
+
+      // 5) Scale text box positions to NEW canvas size
+      const newRect = canvas.getBoundingClientRect();
+      const sx = oldRect.width  ? (newRect.width  / oldRect.width)  : 1;
+      const sy = oldRect.height ? (newRect.height / oldRect.height) : 1;
+
+      if (!taskId) return;
+      const saved = ensureTextBoxStore(taskId);
+      saved.forEach(tb => {
+        tb.left *= sx;
+        tb.top  *= sy;
+      });
+      saveState();
+
+      // 6) Re-render boxes from updated positions
+      restoreTextBoxesForTask(taskId);
+
+      if (taskId) commitDrawingSnapshotToState(taskId);
+    };
+    img.src = dataUrl;
+  }, 150);
 });
 
 /* Preload saved drawing for a task */
 function loadDrawingForTask(task_id) {
-  const base64 = state.drawings[task_id] || (state.savedAns[task_id] && state.savedAns[task_id].drawing);
+  const base64 =
+    state.drawings[task_id] ||
+    (state.savedAns[task_id] && state.savedAns[task_id].drawing);
+
+  resizeCanvasToDisplay();
+  setCanvasBackground();
+
   if (base64) {
     const img = new Image();
     img.onload = () => {
-      resizeCanvasToDisplay();
-      setCanvasBackground();
-      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      const { w, h } = getCanvasCssSize();
+      ctx.drawImage(img, 0, 0, w, h);
     };
     img.src = base64;
-  } else {
-    resizeCanvasToDisplay();
-    setCanvasBackground();
   }
 }
 
@@ -728,76 +1627,212 @@ function initCanvas(t) {
 
   // load any saved drawing
   loadDrawingForTask(t.task_id);
+  restoreTextBoxesForTask(t.task_id);
 
   // reset local flags
   hasDrawn = !!state.drawings[t.task_id];
 }
 
+const MAX_ENTROPY_POINTS = 2000; // cap to avoid bloating localStorage
+let currentStrokePoints = [];    // temp buffer while dragging
+
+function recordStrokeStart(taskId) {
+  const m = getTaskMetrics(taskId);
+  const now = performance.now();
+  if (!m.drawing) m.drawing = { strokeCount: 0, firstStrokeMs: null, lastStrokeMs: null, points: [] };
+
+  if (m.drawing.firstStrokeMs == null) m.drawing.firstStrokeMs = now;
+}
+
+function recordStrokeEnd(taskId) {
+  const m = getTaskMetrics(taskId);
+  const now = performance.now();
+  if (!m.drawing) return;
+
+  m.drawing.strokeCount = (m.drawing.strokeCount || 0) + 1;
+  m.drawing.lastStrokeMs = now;
+
+  // append sampled points
+  if (!Array.isArray(m.drawing.points)) m.drawing.points = [];
+  for (const p of currentStrokePoints) m.drawing.points.push(p);
+
+  // cap size
+  if (m.drawing.points.length > MAX_ENTROPY_POINTS) {
+    m.drawing.points = m.drawing.points.slice(m.drawing.points.length - MAX_ENTROPY_POINTS);
+  }
+
+  currentStrokePoints = [];
+  saveState();
+}
+
+function recordStrokePoint(taskId, x, y) {
+  // sample lightly (every ~3-5px movement) to keep it cheap
+  const last = currentStrokePoints[currentStrokePoints.length - 1];
+  if (last) {
+    const dx = x - last.x, dy = y - last.y;
+    if ((dx*dx + dy*dy) < 16) return; // <4px => skip
+  }
+  currentStrokePoints.push({ x, y });
+}
+
+function computeStrokeEntropy01(taskId, grid = 8) {
+  const m = getTaskMetrics(taskId);
+  const pts = m.drawing?.points || [];
+  if (pts.length < 20) return 0;
+
+  const counts = new Array(grid * grid).fill(0);
+
+  for (const p of pts) {
+    // points are in canvas coordinates already (0..canvas.width/height)
+    let cx = Math.floor((p.x / canvas.width) * grid);
+    let cy = Math.floor((p.y / canvas.height) * grid);
+    cx = Math.max(0, Math.min(grid - 1, cx));
+    cy = Math.max(0, Math.min(grid - 1, cy));
+    counts[cy * grid + cx] += 1;
+  }
+
+  const total = pts.length;
+  let H = 0;
+  for (const c of counts) {
+    if (c === 0) continue;
+    const p = c / total;
+    H -= p * Math.log(p);
+  }
+
+  const Hmax = Math.log(grid * grid);
+  return Hmax > 0 ? (H / Hmax) : 0; // 0..1
+}
 // ------------------ Move to Landmarks Page ------------------
-document.getElementById("go-to-landmarks-btn").addEventListener("click", () => {
+document.getElementById("go-to-landmarks-btn").addEventListener("click", async () => {
   if (isCanvasBlank(canvas)) {
     alert("You cannot save an empty board!");
     return;
   }
-  const t = batch[state.tIdx];
-  // commit drawing snapshot
-  commitDrawingSnapshotToState(t.task_id);
-  // save to backend
-  saveCurrentTaskToBackend();
 
-  // ask user before proceeding
-  const proceed = confirm("Moving to landmarks page. You will not be able to return to drawing.\n\nDo you want to continue?");
-  if (!proceed) {
-    return; // stop here, stay on the same page
+  const t = batch[state.tIdx];
+  if (!t) return;
+
+  finalizeVideoMetricsNow(t.task_id);
+
+  const gate = checkEffortRequirements(t.task_id);
+  if (!gate.ok) {
+    alert(gate.reason);
+    return;
   }
 
-  // Hide task page
-  document.getElementById("task-page").classList.remove("active");
+  const proceed = confirm("Moving to landmarks page. You will not be able to return to drawing.\n\nDo you want to continue?");
+  if (!proceed) return;
 
-  // Show landmark page
-  document.getElementById("landmark-page").classList.add("active");
+  // commit snapshot
+  commitCurrentDrawing(t.task_id);
+  const png = exportPngWithText();
+  const result = await saveDrawingToBackend(t.task_id, png);
+  if (result?.file) state.drawing_paths[t.task_id] = result.file;
 
-  // Landmarks
+  await saveCurrentTaskToBackend(); // saves metrics/landmarks/etc
+
+  // Force a backend upload of the current drawing before leaving drawing page
+  if (state.drawings[t.task_id] && !state.drawing_paths[t.task_id]) {
+    if (result && result.file) state.drawing_paths[t.task_id] = result.file;
+  }
+
+  const m = getTaskMetrics(t.task_id);
+  m.interactions.clickedGoToLandmarksMs = performance.now();
+  m.timing.landmarkEnterMs = performance.now();
+  // finalize drawing duration from page enter
+  m.timing.drawingDurationMs = performance.now() - m.timing.pageEnterMs;
+
+  saveState();
+
+  show("landmark-page");
   renderLandmarksUI(t);
 
-  // Start landmark timer
-  startLandmarkTimer();
+  console.log("drawing_paths raw:", state.drawing_paths[t.task_id]);
+  console.log("drawings raw:", state.drawings[t.task_id]);
 
-  // Commit drawing metrics
-  finalizeTaskMetrics();
-
-  // Load in saved drawing
   const savedImgEl = document.getElementById("saved-drawing-img");
-  if (canvas && savedImgEl) {
-    savedImgEl.src = state.drawing_paths[t.task_id] || state.drawings[t.task_id];
+  if (savedImgEl) {
+    savedImgEl.src = state.drawing_paths[t.task_id] || state.drawings[t.task_id] || "";
   }
 });
 
 // ------------------ Task Metrics ------------------
 function startTaskTimer() {
-  taskMetrics.startTime = performance.now();
-  taskMetrics.landmarkStartTime = null;
-  taskMetrics.clicks = {
-    prevObs: 0,
-    nextObs: 0,
-    addLmClick: 0,
-    delLmClick: 0,
-    reorderLm: 0
-  };
+  const m = getTaskMetrics(t.task_id);
+  m.startTime = performance.now();
+  m.timing.landmarkEnterMs = null;
+  saveState();
 }
 
 function startLandmarkTimer() {
-  taskMetrics.landmarkStartTime = performance.now();
+  const m = getTaskMetrics(t.task_id);
+  m.timing.landmarkEnterMs = performance.now();
+  saveState();
 }
 
 function finalizeTaskMetrics() {
-  const now = performance.now();
-  taskMetrics.drawingDurationMs = now - taskMetrics.startTime;
+  const m = getTaskMetrics(t.task_id);
+  m.interactions.drawingDurationMs =
+    performance.now() - m.timing.pageEnterMs;
+  saveState();
 }
 
-function finalizeLandmarkMetrics() {
-  const now = performance.now();
-  taskMetrics.landmarkDurationMs = now - taskMetrics.landmarkStartTime;
+function finalizeLandmarkMetrics(taskId) {
+  const m = getTaskMetrics(taskId);
+  if (m.timing.landmarkEnterMs != null) {
+    m.timing.landmarkDurationMs = performance.now() - m.timing.landmarkEnterMs;
+  }
+  saveState();
+}
+
+function finalizeVideoMetricsNow(taskId) {
+  finalizeWatchIfPlaying(taskId); // you already have this
+  saveState();
+}
+
+function checkEffortRequirements(taskId) {
+  const m = getTaskMetrics(taskId);
+
+  const N_STROKES = 10;
+  const K_SECONDS = 10;      // between first and last stroke
+  const MIN_ENTROPY = 0.25;
+  const MIN_REACHED_FRAC = 0.70;
+  const MIN_WATCH_FRAC = 0.50;
+
+  // --- drawing checks ---
+  const strokeCount = m.drawing?.strokeCount || 0;
+  if (strokeCount < N_STROKES) {
+    return { ok: false, reason: `Please draw a bit more detail on your map.` };
+  }
+
+  const first = m.drawing?.firstStrokeMs;
+  const last  = m.drawing?.lastStrokeMs;
+  if (first == null || last == null || (last - first) < K_SECONDS * 1000) {
+    return { ok: false, reason: `Please spend some more time drawing before proceeding.` };
+  }
+
+  const entropy = computeStrokeEntropy01(taskId, 8);
+  if (entropy < MIN_ENTROPY) {
+    return { ok: false, reason: `Please draw the route and landmarks more fully across the canvas (not just in one small area).` };
+  }
+
+  // --- video checks ---
+  const video = document.getElementById("obs-video");
+  const dur = (video && isFinite(video.duration)) ? video.duration : null;
+
+  if (dur != null && dur > 0) {
+    const reached = m.video?.maxWatchedTime || 0;
+    const watchMs = m.video?.totalWatchTimeMs || 0;
+
+    if (reached < MIN_REACHED_FRAC * dur) {
+      return { ok: false, reason: `Please watch more of the video before proceeding.` };
+    }
+    if (watchMs < MIN_WATCH_FRAC * dur * 1000) {
+      return { ok: false, reason: `Please spend a bit more time watching the video before proceeding.` };
+    }
+  }
+
+  return { ok: true, reason: "ok" };
 }
 
 // ------------------ Autosave ------------------
@@ -812,35 +1847,53 @@ async function saveCurrentTaskToBackend() {
   const t = batch[state.tIdx];
   if (!t) return;
 
-  // if on task page attempt to save drawing if present
+  const taskId = t.task_id;
+  const m = getTaskMetrics(taskId);
+
+  // Save drawing if on task page
   if (state.currentPage === "task-page") {
-    if (!state.drawings[t.task_id] && !isCanvasBlank(canvas)) {
-      state.drawings[t.task_id] = canvas.toDataURL("image/png");
-      const result = await saveDrawingToBackend(t.task_id, state.drawings[t.task_id]);
-      state.drawing_paths[t.task_id] = result.file;
+    // persist editable state
+    saveTextBoxesForTask(taskId);
+    snapshotCanvasToState(taskId);
+
+    // upload an image that includes text overlays
+    const png = exportPngWithText();
+
+    if (!state.drawing_paths[taskId]) {
+      const result = await saveDrawingToBackend(taskId, png);
+      if (result?.file) state.drawing_paths[taskId] = result.file;
+    } else {
+      // optional: if you want autosave to overwrite/update each time,
+      // still call saveDrawingToBackend(taskId, png) and let backend replace it.
+      saveDrawingToBackend(taskId, png)
     }
-  } else if (state.currentPage === "landmark-page") {
-    const landmarks = state.landmarks[t.task_id] || [];
-    console.log("Task metrics at save:", taskMetrics);
-    const payload = { 
-      task_id: t.task_id, 
-      landmarks, 
-      metrics: {
-          durationMs:    taskMetrics.durationMs,
-          clickCounts:  taskMetrics.clicks
-        }
-      }
-    try {
-      await fetch(BASE + "/save_answer", {
-        method: "POST",
-        headers: {"Content-Type":"application/json"},
-        body: JSON.stringify(payload)
-      });
-    } catch (err) {
-      console.warn("Autosave save_answer failed:", err);
-    }
+
+    m.timing.drawingDurationMs = performance.now() - m.timing.pageEnterMs;
   }
-  
+
+  // If on landmark page, sync landmarks from state (DOM sync happens elsewhere)
+  const landmarks = state.landmarks[taskId] || [];
+
+  const payload = {
+    task_id: taskId,
+    landmarks,
+    drawing: state.drawings[taskId] || null,
+    task_metrics: m,
+    prolific_id: state.prolific?.pid || null
+  };
+
+  console.log("Sending save_answer payload:", payload);
+
+  try {
+    await fetch(BASE + "/save_answer", {
+      method: "POST",
+      headers: {"Content-Type":"application/json"},
+      body: JSON.stringify(payload)
+    });
+  } catch (err) {
+    console.warn("save_answer failed:", err);
+  }
+
   saveState();
 }
 
@@ -880,61 +1933,91 @@ async function saveLandmarksToBackend(task_id, landmarks) {
 }
 
 // ------------------ Validate Landmarks ------------------
-function validateLandmarks(landmarks) {
-  // Rule 1: first element must contain "start"
+function validateLandmarks(landmarks, endpointOrder) {
+  console.log("Validating landmarks:", landmarks, "with endpoint order:", endpointOrder);
+  // ---------- Rule 1: start ----------
   if (!landmarks[0].toLowerCase().includes("start")) {
     return { valid: false, reason: "First landmark must contain 'start'" };
   }
 
-  // Rule 2: last element must contain "end"
+  // ---------- Rule 2: end ----------
   if (!landmarks[landmarks.length - 1].toLowerCase().includes("end")) {
     return { valid: false, reason: "Last landmark must contain 'end'" };
   }
 
-  // Rule 3: must include all required endpoints
-  const requiredEndpoints = ["endpoint 1", "endpoint 2", "endpoint 3"];
+  // ---------- Rule 3: must include all required endpoints ----------
+  const requiredEndpoints = endpointOrder.map(
+    e => `point ${e.toLowerCase()}`
+  );
+
   for (let ep of requiredEndpoints) {
     if (!landmarks.some(l => l.toLowerCase().includes(ep))) {
       return { valid: false, reason: `Missing ${ep}` };
     }
   }
 
-  // Rule 4: no two endpoints adjacent
+  // ---------- Rule 4: no two endpoints adjacent ----------
   for (let i = 0; i < landmarks.length - 1; i++) {
     if (
-      landmarks[i].toLowerCase().includes("endpoint") &&
-      landmarks[i + 1].toLowerCase().includes("endpoint")
+      landmarks[i].toLowerCase().includes("point") &&
+      landmarks[i + 1].toLowerCase().includes("point")
     ) {
-      return { valid: false, reason: "No two endpoints may be adjacent" };
+      return { valid: false, reason: "No two points may be adjacent (must have a separating landmark)" };
     }
   }
 
-  // All checks passed
+  // ---------- Rule 5: endpoints must follow task-defined order ----------
+  const observedOrder = [];
+
+  for (let l of landmarks) {
+    const m = l.toLowerCase().match(/point\s+([abc])/);
+    if (m) {
+      observedOrder.push(m[1].toUpperCase());
+    }
+  }
+
+  // observedOrder should match endpointOrder exactly
+  if (observedOrder.length !== endpointOrder.length) {
+    return {
+      valid: false,
+      reason: "Incorrect number of points"
+    };
+  }
+
+  for (let i = 0; i < endpointOrder.length; i++) {
+    if (observedOrder[i] !== endpointOrder[i]) {
+      return {
+        valid: false,
+        reason: `Points must appear in order ${endpointOrder.join(" → ")}`
+      };
+    }
+  }
+
+  // ---------- All checks passed ----------
   return { valid: true, reason: "Valid landmark sequence" };
 }
 
 // Save landmarks button
 document.getElementById("save-landmarks-btn").addEventListener("click", async () => {
-  // however you get landmarks from the UI
   const t = batch[state.tIdx];
   if (!t) return;
 
-  // validate landmarks
-  const landmarks = state.landmarks[t.task_id] || [];
-  if (landmarks.length === 0) {
-    alert("No landmarks entered."); 
-    return;
-  }      
+  // Get landmarks from DOM, sync into state
+  const landmarks = getCurrentTaskLandmarks(t);
 
-  const result = validateLandmarks(landmarks);
+  if (landmarks.length === 0) {
+    alert("No landmarks entered.");
+    return;
+  }
+
+  const result = validateLandmarks(landmarks, t.endpoint_order || []);
   if (!result.valid) {
     alert("Validation failed: " + result.reason);
     return;
   }
 
-  // If valid, save to backend
   try {
-    await saveLandmarksToBackend(taskId, landmarks);
+    await saveLandmarksToBackend(t.task_id, landmarks);
     alert("Landmarks saved successfully!");
   } catch (err) {
     console.error("Error saving landmarks:", err);
@@ -948,30 +2031,48 @@ document.getElementById("save-btn").onclick = async () => {
   const t = batch[state.tIdx];
   if (!t) return;
 
-  // validate landmarks
-  const lms = state.landmarks[t.task_id] || [];
+  // Always pull current values from DOM
+  const lms = getCurrentTaskLandmarks(t);
   if (lms.length === 0) {
-    alert("No landmarks entered."); 
+    alert("No landmarks entered.");
     return;
   }
 
-  landmarkValidation = validateLandmarks(lms);
+  const landmarkValidation = validateLandmarks(lms, t.endpoint_order || []);
   if (!landmarkValidation.valid) {
     alert("Landmark validation failed: " + landmarkValidation.reason);
     return;
   }
 
-  finalizeLandmarkMetrics();
+  finalizeLandmarkMetrics(t.task_id);
+  finalizeVideoMetricsNow(t.task_id);
+  
+  getTaskMetrics(t.task_id).interactions.clickedSaveNextMs = performance.now();
+
+  const gate = checkEffortRequirements(t.task_id);
+  if (!gate.ok) {
+    alert(gate.reason);
+    return;
+  }
+
+  const cur = batch[state.tIdx];
+  if (cur?.task_id) saveTextBoxesForTask(cur.task_id);
 
   // save to backend
   await saveCurrentTaskToBackend();
 
-  // move to next task (or remain if last)
   if (state.tIdx < batch.length - 1) {
     state.tIdx++;
-    state.currentPage = "task-page";
-    saveState();
+
+    // Render the next task content
     renderTask();
+    updateRouteIndicator();
+
+    // Switch to task page & persist state
+    show("task-page");
+
+    // Make sure autosave is running for the new task
+    startAutoSave();
   } else {
     alert("No more tasks in this batch.");
   }
@@ -979,19 +2080,43 @@ document.getElementById("save-btn").onclick = async () => {
 
 // ------------------ Submit All ------------------
 document.getElementById("submit-all-btn").onclick = async () => {
-  for (const t of batch) {
-    await fetch(BASE + "/save_answer", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        task_id: t.task_id,
-        landmarks: state.landmarks[t.task_id] || [],
-        drawing: state.drawings[t.task_id] || null
-      })
-    });
+  try {
+    const t = batch[state.tIdx];
+    if (!t) return;
+
+    // 1) Sync current landmarks from DOM → state
+    const lms = getCurrentTaskLandmarks(t);
+    if (lms.length === 0) {
+      alert("No landmarks entered.");
+      return;
+    }
+
+    // 2) Validate current task
+    const v = validateLandmarks(lms, t.endpoint_order || []);
+    if (!v.valid) {
+      alert("Landmark validation failed: " + v.reason);
+      return;
+    }
+
+    // 3) Save current task (so latest edits + metrics are persisted)
+    finalizeLandmarkMetrics(t.task_id);
+    await saveCurrentTaskToBackend();
+
+    // 4) Finalize + redirect
+    const resp = await fetch(BASE + "/complete", { method: "POST" });
+    const data = await resp.json();
+
+    if (data.status !== "ok") {
+      alert("Submission failed. Please contact the researcher.");
+      return;
+    }
+
+    window.location.href = data.completion_url;
+
+  } catch (err) {
+    console.error("Submission error:", err);
+    alert("Submission error. Please try again or contact the researcher.");
   }
-  await fetch(BASE + "/submit_answers", { method: "POST" });
-  show("done-page");
 };
 
 // Update the visibility of save and submit buttons based on the current question
@@ -1005,52 +2130,24 @@ function updateSaveButtons() {
     }
 }
 
-/* ------------------ Clear cache / New batch ------------------ */
-// document.getElementById("clear-cache-btn").addEventListener("click", () => {
-//   const really = window.confirm("⚠️ This will erase any unsaved answers. Continue?");
-//   if (!really) return;
-//   state = {
-//     currentPage: "task-page",
-//     batch: [],
-//     savedAns: {},
-//     tIdx: 0,
-//     obsIdxPerTask: {},
-//     drawings: {},
-//     drawing_paths: {},
-//     landmarks: {}
-//   };
-//   batch = [];
-//   savedAns = {};
-//   saveState();
-//   location.reload();
-// });
-
-const newBatchBtn = document.getElementById("new-batch-btn");
-if (newBatchBtn) {
-  newBatchBtn.onclick = () => {
-    state = {
-      currentPage: "instr-page",
-      batch: [],
-      savedAns: {},
-      tIdx: 0,
-      obsIdxPerTask: {},
-      drawings: {},
-      landmarks: {}
-    };
-    batch = [];
-    savedAns = {};
-    saveState();
-    show("instr-page");
-  };
-};
-
 /* ------------------ Helpful: save state before unload ------------------ */
-window.addEventListener("beforeunload", (e) => {
-  // commit current canvas
-  const t = batch[state.tIdx];
-  if (t && t.task_id) commitDrawingSnapshotToState(t.task_id);
+/* ------------------ Save state safely before unload ------------------ */
+window.addEventListener("beforeunload", () => {
+  const t = batch?.[state.tIdx];
+  if (!t || !t.task_id) return;
+
+  const taskId = t.task_id;
+
+  // 1) Persist text boxes (DOM → state)
+  saveTextBoxesForTask(taskId);
+
+  // 2) Persist canvas pixels (no flattening)
+  commitDrawingSnapshotToState(taskId);
+
+  // 3) Save local state
   saveState();
 
-  // optional: try a synchronous navigator.sendBeacon to save to backend
-  // Not implemented here to avoid complexity; autosave handles periodic saves.
+  // NOTE:
+  // Do NOT call flattenTextToCanvas() here.
+  // Flattening deletes DOM text boxes and breaks refresh persistence.
 });

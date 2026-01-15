@@ -1,0 +1,67 @@
+[
+  {
+    "task_id": 44,
+    "landmarks": [
+      "Start (S)",
+      "Pass through the First intersession with crosswalks",
+      "Second intersession with crosswalks",
+      "Point C",
+      "Pass through the Third intersession with crosswalks",
+      "Point A",
+      "Forth intersession with crosswalk",
+      "Pass through a fifth intersession with crosswalks",
+      "Point B",
+      "End (G)"
+    ],
+    "timestamp": "2025-12-30T16:58:05.825139+00:00"
+  },
+  {
+    "task_id": 45,
+    "landmarks": [
+      "Start (S)",
+      "Pass through the first intersection",
+      "Point B",
+      "Second intersection",
+      "Point A",
+      "Pass by an alleyway",
+      "Point C",
+      "Brick buildings",
+      "End (G)"
+    ],
+    "timestamp": "2025-12-30T17:20:39.054819+00:00"
+  },
+  {
+    "task_id": 46,
+    "landmarks": [
+      "Start (S)",
+      "Pass through the first intersession with crosswalks",
+      "Pass through the second intersession with crosswalks",
+      "Pass through the third intersession with crosswalks",
+      "Point B",
+      "Pass through the forth intersession with crosswalks",
+      "Point C",
+      "Pass through the fifth intersession with crosswalks",
+      "Point A",
+      "Pass through the sixth intersession with crosswalks",
+      "End (G)"
+    ],
+    "timestamp": "2025-12-30T17:39:59.253689+00:00"
+  },
+  {
+    "task_id": 47,
+    "landmarks": [
+      "Start (S)",
+      "Pass through the first  intersession w/  crosswalks",
+      "Point B",
+      "Pass through the second intersession w/  crosswalks",
+      "Pass through the third intersession w/  crosswalks",
+      "Point C",
+      "Pass through the forth intersession w/  crosswalks",
+      "Point A",
+      "Pass through the fifth intersession w/  crosswalks",
+      "intersession w/  crosswalks",
+      "End (G)"
+    ],
+    "timestamp": "2025-12-30T17:54:28.225775+00:00"
+  }
+]

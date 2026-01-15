@@ -1,0 +1,102 @@
+[
+  {
+    "task_id": 14,
+    "landmarks": [
+      "Start (S)",
+      "Bridge crossing over water",
+      "Intersection with crosswalks",
+      "Boston South Station building",
+      "Point C",
+      "Intersection with crosswalks",
+      "Busy multi-lane city road",
+      "Point B",
+      "Intersection with crosswalks",
+      "Downtown commercial buildings",
+      "Point A",
+      "Tall office buildings",
+      "Intersection near Financial District",
+      "End (G)"
+    ],
+    "timestamp": "2025-12-25T11:29:57.848076+00:00"
+  },
+  {
+    "task_id": 15,
+    "landmarks": [
+      "Start (S)",
+      "Boston South Station building",
+      "Intersection with crosswalks",
+      "Point C",
+      "Busy city road",
+      "Major intersection near expressway",
+      "Point G",
+      "Intersection with crosswalks",
+      "Downtown office buildings",
+      "Point A",
+      "Intersection with crosswalks",
+      "Commercial buildings along the road",
+      "Point B",
+      "End (G)"
+    ],
+    "timestamp": "2025-12-25T11:48:44.583528+00:00"
+  },
+  {
+    "task_id": 16,
+    "landmarks": [
+      "Start (S)",
+      "Intersection with crosswalks",
+      "Point B",
+      "Intersection with crosswalks",
+      "Point A",
+      "Intersection with crosswalks",
+      "Point C",
+      "Downtown buildings",
+      "End (G)"
+    ],
+    "timestamp": "2025-12-25T12:06:15.283907+00:00"
+  },
+  {
+    "task_id": 17,
+    "landmarks": [
+      "Start (S)",
+      "Intersection with crosswalks",
+      "Point C",
+      "Intersection with crosswalks",
+      "Point A",
+      "Intersection with crosswalks",
+      "Point B",
+      "Intersection near Financial District",
+      "End (G)"
+    ],
+    "timestamp": "2025-12-25T12:21:31.449433+00:00"
+  },
+  {
+    "task_id": 18,
+    "landmarks": [
+      "Start (S)",
+      "Intersection with crosswalks",
+      "Point A",
+      "Intersection with crosswalks",
+      "Point B",
+      "Intersection with crosswalks",
+      "Point C",
+      "Parking garage and downtown buildings",
+      "End (G)"
+    ],
+    "timestamp": "2025-12-25T12:42:51.187604+00:00"
+  },
+  {
+    "task_id": 19,
+    "landmarks": [
+      "Start (S)",
+      "Intersection with crosswalks",
+      "Point C",
+      "Intersection with crosswalks",
+      "Point A",
+      "Intersection with crosswalks",
+      "Point B",
+      "Downtown buildings and parking garage",
+      "End (G)"
+    ],
+    "timestamp": "2025-12-25T12:47:12.185653+00:00"
+  }
+]

@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+  <meta charset="utf-8">
+  <title>Landmark Listing Task</title>
+  <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='css/style.css') }}">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body>
+
+  <!-- LANDMARK-SPECIFIC INSTRUCTIONS -->
+  <template id="instructions-template">
+    <h2>Instructions (Landmark Study)</h2>
+
+    <p>You will complete <strong>6 routes</strong>. For each route:</p>
+
+    <h3>What you will see</h3>
+    <ul>
+      <li>A <strong>street-view video</strong> of a route.</li>
+      <li>A <strong>satellite map</strong> you can open to see the route overview.</li>
+      <li>A <strong>sketch map drawn by a previous participant</strong>.</li>
+    </ul>
+
+    <h3>Your task</h3>
+    <ol>
+      <li>
+        Study the video and the sketch map.
+      </li>
+      <li>
+        Create an <strong>ordered list</strong> of landmarks / road features in the order they appear in the video.
+        <ul>
+          <li>You must include <strong>Start (S)</strong>, <strong>Goal (G)</strong>, and <strong>Points A/B/C</strong>.</li>
+          <li>You may edit text, add/delete items, and drag-and-drop to reorder.</li>
+        </ul>
+      </li>
+      <li>
+        Click <strong>Save & Next</strong> to continue to the next route.
+      </li>
+      <li>
+        After all routes, click <strong>Submit All</strong>.
+      </li>
+    </ol>
+  </template>
+
+  <!-- Instructions Page -->
+  <div id="instr-page" class="page active">
+    <h1>Welcome!</h1>
+    <div id="instr-content"></div>
+
+    <h2>Example</h2>
+    <div id="example-container" class="example">
+      <div class="example-maps">
+        <div>
+          <h4>Example Sketch Map</h4>
+          <img src="{{ url_for('static', filename='images/Boston Map Sketch.jpg') }}"
+               alt="Example sketch map"
+               style="max-width:100%;border:1px solid #ccc;">
+        </div>
+      </div>
+
+      <div class="example-observations" style="margin-top:1rem;">
+        <h4>Example Observations</h4>
+        <video id="example-obs-video" width="100%" controls preload="metadata">
+          <source src="{{ url_for('serve_video', filename='rid_72.mp4') }}" type="video/mp4">
+        </video>
+      </div>
+
+      <div class="example-landmarks" style="margin-top:1rem;">
+        <h4>Example Landmark List</h4>
+        <ul>
+          <li>Start (S)</li>
+          <li>First intersection with crosswalks</li>
+          <li>Second intersection with crosswalks</li>
+          <li>Point B</li>
+          <li>…</li>
+          <li>End (G)</li>
+        </ul>
+      </div>
+    </div>
+
+    <button id="begin-btn">Begin</button>
+  </div>
+
+  <!-- Optional Quiz Page -->
+  <div id="quiz-page" class="page">
+    <h1>Quiz</h1>
+    <div class="quiz-visuals">
+      <div class="quiz-map">
+        <img src="{{ url_for('static', filename='images/Boston Map Sketch.jpg') }}"
+             alt="Example sketch map"
+             class="quiz-img">
+      </div>
+      <div class="quiz-observations">
+        <video id="quiz-obs-video" width="100%" controls preload="metadata">
+          <source src="{{ url_for('serve_video', filename='rid_72.mp4') }}" type="video/mp4">
+        </video>
+      </div>
+    </div>
+
+    <div id="quiz-content">
+      <h3>Drag and drop Start, End, and Points A/B/C into the correct positions…</h3>
+      <ul id="quiz-landmark-list"></ul>
+      <button id="submit-quiz-btn">Submit</button>
+      <div id="quiz-feedback" style="margin-top:1rem;font-weight:bold;"></div>
+    </div>
+  </div>
+
+  <!-- LANDMARK TASK PAGE -->
+  <div id="task-page" class="page">
+    <div id="user-info" style="margin-bottom: 1em; font-weight: bold;">
+      User ID: {{ user_id }}, Study ID: {{ study_id }}
+    </div>
+
+    <div id="route-indicator" style="font-weight: bold; margin-bottom: 0.5rem;">
+      Route 1 of 6
+    </div>
+
+    <button id="show-instructions-btn" style="margin-left:auto;">Show Instructions</button>
+    <div id="instructions-modal" style="display:none;">
+      <div id="modal-instr-content"></div>
+    </div>
+
+    <!-- Map modal (optional but likely helpful) -->
+    <div class="map" id="map-container">
+      <button id="open-map-btn">See Satellite Map</button>
+      <div id="map-modal">
+        <img alt="Map" id="map-img">
+        <button id="map-hide-btn" aria-label="Hide map">✕</button>
+      </div>
+    </div>
+
+    <!-- Observations -->
+    <div class="observations">
+      <h2>Observations</h2>
+      <video id="obs-video" controls preload="metadata" width="800">
+        <source id="obs-video-src" type="video/mp4">
+      </video>
+    </div>
+
+    <!-- Saved drawing -->
+    <div id="saved-drawing-container" style="margin-top:1rem;">
+      <h3>Sketch Map</h3>
+      <img id="saved-drawing-img" alt="Sketch map to annotate">
+    </div>
+
+    <!-- Landmark editor -->
+    <form id="landmarks-form" style="margin-top:1rem;">
+      <label for="landmark-list">
+        Please list the landmarks / road features in the order they are seen in the observations.
+        <br>
+        You must include Start (S), Goal (G), and Points A/B/C.
+      </label>
+
+      <ul id="landmark-list"></ul>
+      <button type="button" id="save-landmarks-btn">Save Landmarks</button>
+    </form>
+
+    <div style="margin-top: 1rem; display:flex; gap: 0.5rem;">
+      <button type="button" id="save-btn">Save & Next</button>
+      <button type="button" id="submit-all-btn" style="display:none;">Submit All</button>
+    </div>
+  </div>
+
+  <div id="screenout-page" class="page">
+    <h1>Thank you for your time</h1>
+    <p>Unfortunately, you were not able to pass the short quiz after the maximum number of attempts.</p>
+  </div>
+
+  <div id="done-page" class="page">
+    <h2>Submitting your responses…</h2>
+    <p>You will be redirected to Prolific automatically.</p>
+  </div>
+
+  <script src="{{ url_for('static', filename='js/app.js') }}" defer></script>
+</body>
+</html>

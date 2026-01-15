@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+  <meta charset="utf-8">
+  <title>Draw Sketch Maps</title>
+  <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='css/style.css') }}">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body>
+
+  <!-- DRAWING-SPECIFIC INSTRUCTIONS -->
+  <template id="instructions-template">
+    <h2>Instructions (Drawing Study)</h2>
+
+    <p>You will complete <strong>6 routes</strong>. For each route:</p>
+
+    <h3>What you will see</h3>
+    <ul>
+      <li>A <strong>street-view video</strong> of a route.</li>
+      <li>Markers <strong>A, B, C</strong> appear briefly during the video (any order).</li>
+      <li>A <strong>satellite map</strong> showing Start→Goal and the A/B/C order along the route.</li>
+    </ul>
+
+    <h3>Your task</h3>
+    <ol>
+      <li>
+        <strong>Draw a sketch map</strong> on the canvas that would allow someone to navigate from
+        <strong>Start (S)</strong> to <strong>Goal (G)</strong>, stopping at <strong>A, B, C</strong>.
+        <ul>
+          <li>Label the points in the order along the path (e.g., <em>S → B → A → C → G</em>).</li>
+          <li>Include helpful landmarks and road features.</li>
+          <li><strong>Text-only maps are not acceptable.</strong> You must draw paths/shapes.</li>
+        </ul>
+      </li>
+
+      <li>
+        When you are satisfied, click <strong>“Save & Next”</strong> to continue to the next route.
+      </li>
+
+      <li>
+        After all routes, click <strong>“Submit All”</strong>.
+      </li>
+    </ol>
+  </template>
+
+  <!-- Instructions Page -->
+  <div id="instr-page" class="page active">
+    <h1>Welcome!</h1>
+    <div id="instr-content"></div>
+
+    <h2>Example</h2>
+    <div id="example-container" class="example">
+      <div class="example-maps">
+        <div>
+          <h4>Satellite Map</h4>
+          <img src="{{ url_for('static', filename='images/rid_72.png') }}"
+               alt="Example satellite map"
+               style="max-width:100%;border:1px solid #ccc;">
+        </div>
+        <div>
+          <h4>Hand-Drawn Map</h4>
+          <img src="{{ url_for('static', filename='images/Boston Map Sketch.jpg') }}"
+               alt="Example sketch map"
+               style="max-width:100%;border:1px solid #ccc;">
+        </div>
+      </div>
+
+      <div class="example-observations" style="margin-top:1rem;">
+        <h4>Example Observations</h4>
+        <video id="example-obs-video" width="100%" controls preload="metadata">
+          <source src="{{ url_for('serve_video', filename='rid_72.mp4') }}" type="video/mp4">
+        </video>
+      </div>
+    </div>
+
+    <button id="begin-btn">Begin</button>
+  </div>
+
+  <!-- Optional Quiz Page (same as your existing one) -->
+  <div id="quiz-page" class="page">
+    <h1>Quiz</h1>
+    <div class="quiz-visuals">
+      <div class="quiz-map">
+        <img src="{{ url_for('static', filename='images/Boston Map Sketch.jpg') }}"
+             alt="Example sketch map"
+             class="quiz-img">
+      </div>
+      <div class="quiz-observations">
+        <video id="quiz-obs-video" width="100%" controls preload="metadata">
+          <source src="{{ url_for('serve_video', filename='rid_72.mp4') }}" type="video/mp4">
+        </video>
+      </div>
+    </div>
+
+    <div id="quiz-content">
+      <h3>Drag and drop Start, End, and Points A/B/C into the correct positions…</h3>
+      <ul id="quiz-landmark-list"></ul>
+      <button id="submit-quiz-btn">Submit</button>
+      <div id="quiz-feedback" style="margin-top:1rem;font-weight:bold;"></div>
+    </div>
+  </div>
+
+  <!-- DRAW TASK PAGE -->
+  <div id="task-page" class="page">
+    <div id="user-info" style="margin-bottom: 1em; font-weight: bold;">
+      User ID: {{ user_id }}, Study ID: {{ study_id }}
+    </div>
+
+    <div id="route-indicator" style="font-weight: bold; margin-bottom: 0.5rem;">
+      Route 1 of 6
+    </div>
+
+    <button id="show-instructions-btn" style="margin-left:auto;">Show Instructions</button>
+    <div id="instructions-modal" style="display:none;">
+      <div id="modal-instr-content"></div>
+    </div>
+
+    <!-- Map modal -->
+    <div class="map" id="map-container">
+      <button id="open-map-btn">See Satellite Map</button>
+      <div id="map-modal">
+        <img alt="Map" id="map-img">
+        <button id="map-hide-btn" aria-label="Hide map">✕</button>
+      </div>
+    </div>
+
+    <!-- Observations -->
+    <div class="observations">
+      <h2>Observations</h2>
+      <video id="obs-video" controls preload="metadata" width="800">
+        <source id="obs-video-src" type="video/mp4">
+      </video>
+    </div>
+
+    <!-- Drawing Board -->
+    <div class="drawing-container">
+      <section class="tools-board">
+        <div class="row">
+          <h1 class="title">TOOLS</h1>
+          <label class="title">Shapes</label>
+          <ul class="options">
+            <li class="option tool" id="rectangle"><img src="{{ url_for('static', filename='icons/rectangle.svg') }}"><span>Rectangle</span></li>
+            <li class="option tool" id="circle"><img src="{{ url_for('static', filename='icons/circle.svg') }}"><span>Circle</span></li>
+            <li class="option tool" id="triangle"><img src="{{ url_for('static', filename='icons/triangle.svg') }}"><span>Triangle</span></li>
+            <li class="option tool" id="line"><img src="{{ url_for('static', filename='icons/line.svg') }}"><span>Line</span></li>
+            <li class="option tool" id="text"><span>Add Text Box</span></li>
+            <li class="option"><input type="checkbox" id="fill-color"><label for="fill-color">Fill shape</label></li>
+          </ul>
+        </div>
+
+        <div class="row">
+          <label class="title">Options</label>
+          <ul class="options">
+            <li class="option active tool" id="brush"><img src="{{ url_for('static', filename='icons/brush.svg') }}"><span>Brush</span></li>
+            <li class="option tool" id="eraser"><img src="{{ url_for('static', filename='icons/eraser.svg') }}"><span>Eraser</span></li>
+            <li class="option"><input type="range" id="size-slider" min="1" max="30" value="5"></li>
+          </ul>
+        </div>
+
+        <div class="row colors">
+          <label class="title">Colors</label>
+          <ul class="options">
+            <li class="option"></li>
+            <li class="option selected"></li>
+            <li class="option"></li>
+            <li class="option"></li>
+            <li class="option"><input type="color" id="color-picker" value="#4A98F7"></li>
+          </ul>
+        </div>
+
+        <div class="row buttons">
+          <button id="undo-btn">Undo</button>
+          <button id="redo-btn">Redo</button>
+          <button class="clear-canvas">Clear Workspace</button>
+          <button class="save-img">Commit Current Drawing</button>
+        </div>
+      </section>
+
+      <section class="drawing-board">
+        <canvas id="canvas"></canvas>
+      </section>
+    </div>
+
+    <!-- NEW: finish-route controls -->
+    <div style="margin-top: 1rem; display:flex; gap: 0.5rem;">
+      <button type="button" id="save-btn">Save & Next</button>
+      <button type="button" id="submit-all-btn" style="display:none;">Submit All</button>
+    </div>
+  </div>
+
+  <div id="screenout-page" class="page">
+    <h1>Thank you for your time</h1>
+    <p>Unfortunately, you were not able to pass the short quiz after the maximum number of attempts.</p>
+  </div>
+
+  <div id="done-page" class="page">
+    <h2>Submitting your responses…</h2>
+    <p>You will be redirected to Prolific automatically.</p>
+  </div>
+
+  <script src="{{ url_for('static', filename='js/app.js') }}" defer></script>
+</body>
+</html>
