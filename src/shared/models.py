@@ -17,16 +17,19 @@ class User(UserMixin, db.Model):
     inflight_batch  = db.Column(db.Boolean, default=False)
     passed_quiz     = db.Column(db.Boolean, default=False)
 
-    responses   = db.relationship("Response", backref="user", lazy=True)
+    drawings   = db.relationship("Drawing", backref="user", lazy=True)
+    landmarks  = db.relationship("Landmark", backref="user", lazy=True)
 
 class Task(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     route_id = db.Column(db.String, unique=True, index=True, nullable=False)
-    served_count   = db.Column(db.Integer, default=0)
+    served_count_draw = db.Column(db.Integer, default=0)
+    served_count_landmarks = db.Column(db.Integer, default=0)
     landmarks     = db.Column(db.JSON, default=list)
     endpoints     = db.Column(db.JSON, default=list)
 
-    responses      = db.relationship("Response", backref="task", lazy=True)
+    drawings      = db.relationship("Drawing", backref="task", lazy=True)
+    landmarks     = db.relationship("Landmark", backref="task", lazy=True)
 
 class Drawing(db.Model):
     id              = db.Column(db.Integer, primary_key=True)

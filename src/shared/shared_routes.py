@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 from flask import request, redirect, url_for, jsonify, session, render_template
 from flask_login import login_user, login_required, current_user, logout_user
-from src.models import db, User
+from src.shared.models import db, User
 
 def register_shared_routes(app):
 
@@ -93,5 +93,8 @@ def register_shared_routes(app):
     def complete():
         current_user.inflight_batch = False
         db.session.commit()
-        completion_url = "https://app.prolific.com/submissions/complete?cc=CS6Z1JEG"
+        if app.config.get("APP_MODE") == "draw":
+            completion_url = "https://app.prolific.com/submissions/complete?cc=CS6Z1JEG"
+        else:
+            completion_url = "https://app.prolific.com/submissions/complete?cc=C170KQM0"
         return jsonify({"status": "ok", "completion_url": completion_url})

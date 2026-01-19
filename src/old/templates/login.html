@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Napkin-Map Login</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      display: flex;
+      height: 100vh;
+      margin: 0;
+      align-items: center;
+      justify-content: center;
+      background: #f5f5f5;
+    }
+    #login-container {
+      background: white;
+      padding: 2rem;
+      border-radius: 8px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+      text-align: center;
+      max-width: 400px;
+      width: 100%;
+    }
+    input {
+      padding: 0.5rem;
+      font-size: 1rem;
+      width: 100%;
+      margin-bottom: 1rem;
+    }
+    button {
+      padding: 0.5rem 1rem;
+      font-size: 1rem;
+      cursor: pointer;
+      border: none;
+      border-radius: 4px;
+      background: #007BFF;
+      color: white;
+    }
+    button:hover {
+      background: #0056b3;
+    }
+    #login-error {
+      color: #b00020;
+      margin-top: 1rem;
+    }
+    #hit-id-display {
+      margin-top: 1rem;
+      font-weight: bold;
+      word-break: break-all;
+    }
+  </style>
+</head>
+<body>
+  <div id="login-container">
+    <h2>Enter IDs</h2>
+    <input type="text" id="user-id" placeholder="Enter your User ID">
+    <input type="text" id="study-id" placeholder="Enter your Study ID">
+    <button onclick="loginWithIds()">Login</button>
+    <p id="login-error"></p>
+    <p id="hit-id-display"></p>
+  </div>
+
+  <script>
+    function login(userId, studyId) {
+      fetch("/authenticate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ 
+          user_id: userId || null,
+          study_id: studyId || null
+        })
+      })
+      .then(res => res.json().then(data => ({status: res.status, body: data})))
+      .then(({status, body}) => {
+        if (status === 200) {
+          if (body.hit_id) {
+            document.getElementById("hit-id-display").innerText = 
+              "Your assigned ID: " + body.hit_id;
+          }
+          // redirect to main app
+          window.location.href = "/";
+        } else {
+          throw new Error(body.error || "Login failed");
+        }
+      })
+      .catch(err => {
+        document.getElementById("login-error").innerText = "Login failed: " + err.message;
+      });
+    }
+
+    function loginWithIds() {
+      const userId = document.getElementById("user-id").value.trim();
+      const studyId = document.getElementById("study-id").value.trim();
+      login(userId || null, studyId || null);
+    }
+  </script>
+</body>
+</html>

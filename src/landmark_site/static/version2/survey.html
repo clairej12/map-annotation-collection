@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+    <meta charset="utf-8">
+    <title>Hand Drawn Map Task</title>
+    <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='css/style.css') }}">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body>
+    <!-- Single source of instructions -->
+    <template id="instructions-template">
+    <h2>Instructions</h2>
+    <p>This section contains <strong>10 routes</strong>. For each route:</p>
+    <ul>
+        <li>You will see a <strong>satellite map</strong> with a path marked from <strong>Start (S)</strong> to <strong>Goal (G)</strong>, passing through <strong>intermediate points (1, 2, 3)</strong>.</li>
+        <li>You will also see a <strong>series of street-view observations</strong> along the path.</li>
+        <li>Your task:</li>
+        <ol>
+            <li><strong>Draw a sketch map</strong> on the canvas that would help someone navigate from Start to Goal, pausing at each of the numbered points (1, 2, 3) along the way.  
+                <ul>
+                    <li>Include <strong>landmarks</strong> (e.g., shops, buildings, trees, signs) and <strong>road features</strong> (e.g., intersections, turns, crossings) that would help a person know where they are at each stage of the path.</li>
+                    <li>Make sure the sketch shows how the path connects from Start → 1 → 2 → 3 → Goal.</li>
+                </ul>
+            </li>
+            <li><strong>Create an ordered list of landmarks and road features</strong> you included on your sketch map.
+                <ul>
+                    <li>We provide some starter landmark suggestions for you.</li>
+                    <li>You can <strong>edit</strong> the text, <strong>add/delete</strong> landmarks, and <strong>drag-and-drop</strong> to reorder them.</li>
+                </ul>
+            </li>
+        </ol>
+        <li>When you are satisfied with both your <strong>sketch map</strong> and <strong>landmark list</strong>, click <strong>"Save & Next"</strong> to continue.</li>
+        <li>Once you have completed all 10 routes, click <strong>"Submit All"</strong>.</li>
+    </ul>
+
+    <h3>Additional Notes</h3>
+    <ul>
+        <li>You can click on the <strong>satellite map</strong> to enlarge it.</li>
+        <li>To move through the street-view sequence, either:
+            <ul>
+                <li>Click on the observation and use the <strong>arrow keys</strong>, or</li>
+                <li>Use the <strong>“Previous Image”</strong> / <strong>“Next Image”</strong> buttons.</li>
+            </ul>
+        </li>
+    </ul>
+    </template>
+
+    <!-- Instructions Page -->
+    <div id="instr-page" class="page active">
+        <h1>Welcome!</h1>
+        <div id="instr-content"></div>
+        <h2>Example</h2>
+        <!-- Example Section -->
+        <div id="example-container" class="example">
+            <!-- Side-by-side example -->
+            <div class="example-maps">
+                <div>
+                    <h4>Satellite Map</h4>
+                    <img src="{{ url_for('static', filename='images/test_easy_processed_maps_2804.png') }}" 
+                        alt="Example satellite map" 
+                        style="max-width:100%;border:1px solid #ccc;">
+                </div>
+                <div>
+                    <h4>Hand-Drawn Map</h4>
+                    <img src="{{ url_for('static', filename='images/sketched_map_2804_cropped.jpg') }}" 
+                        alt="Example sketch map" 
+                        style="max-width:100%;border:1px solid #ccc;">
+                </div>
+            </div>
+
+            <!-- Observations carousel -->
+            <div class="example-observations" style="margin-top:1rem;">
+                <h4>Example Observations</h4>
+                <img id="example-obs-img" 
+                    alt="Example observation" 
+                    style="width:100%;border:1px solid #ccc;">
+                <div style="margin-top:0.5rem;">
+                    <button id="example-prev-obs">Previous</button>
+                    <button id="example-next-obs">Next</button>
+                </div>
+            </div>
+
+            <!-- Example landmarks -->
+            <div class="example-landmarks" style="margin-top:1rem;">
+                <h4>Example Landmark List (in the order they are seen in the observations)</h4>
+                <ul>
+                    <li>Start (S)</li>
+                    <li>Gourmet Deli (red colored)</li>
+                    <li>Endpoint 1</li>
+                    <li>La Pulperia</li>
+                    <li>First intersection (9th Ave and W 44th St)</li>
+                    <li>Mama Mia (on the right across the intersection)</li>
+                    <li>Chipotle</li>
+                    <li>Marseille (on the left after turning)</li>
+                    <li>Endpoint 3</li>
+                    <li>Tavern</li>
+                    <li>Vanilla Gorilla (blue colored)</li>
+                    <li>Endpoint 2</li>
+                    <li>End (G)</li>
+                </ul>
+            </div>
+        </div>
+
+        <button id="begin-btn">Begin Tasks</button>
+    </div>
+
+    <!-- Quiz Page -->
+    <div id="quiz-page" class="page">
+        <h1>Quiz</h1>
+        <div id="quiz-content"></div>
+    </div>
+
+    <!-- Task Page -->
+    <div id="task-page" class="page">
+        <div id="user-info" style="margin-bottom: 1em; font-weight: bold;">
+        User ID: {{ user_id }}, Study ID: {{ study_id }}
+        </div>
+        <script src="{{ url_for('static', filename='app.js') }}"></script>
+
+        <button id="show-instructions-btn" style="margin-left:auto;">Show Instructions</button>
+
+        <div id="instructions-modal" style="display:none;">
+            <div id="modal-instr-content"></div>
+        </div>
+
+        <!-- Map & Observations -->
+        <div class="map" id="map-container">
+            <h2>Map</h2>
+            <img alt="Map" id="map-img">
+            <button id="map-close-btn" aria-label="Close zoom">✕</button>
+        </div>
+        <div class="observations">
+                <h2>Observations</h2>
+                <img id="obs-image" alt="Observation" style="width:100%">
+                <div style="margin-top:1rem;">
+                    <button id="prev-obs">Previous Image</button>
+                    <button id="next-obs">Next Image</button>
+                </div>
+        </div>
+
+        <!-- Drawing Board -->
+        <div class="drawing-container">
+            <section class="tools-board">
+                <div class="row">
+                    <h1 class="title">TOOLS</h1>
+                    <label class="title">Shapes</label>
+                    <ul class="options">
+                        <li class="option tool" id="rectangle"><img src="{{ url_for('static', filename='icons/rectangle.svg') }}"><span>Rectangle</span></li>
+                        <li class="option tool" id="circle"><img src="{{ url_for('static', filename='icons/circle.svg') }}"><span>Circle</span></li>
+                        <li class="option tool" id="triangle"><img src="{{ url_for('static', filename='icons/triangle.svg') }}"><span>Triangle</span></li>
+                        <li class="option tool" id="line"><img src="{{ url_for('static', filename='icons/line.svg') }}"><span>Line</span></li>
+                        <!-- <li class="option tool" id="random-draw"><img src="{{ url_for('static', filename='icons/polygone.svg') }}"><span>Random Draw</span></li> -->
+                        <li class="option"><input type="checkbox" id="fill-color"><label for="fill-color">Fill shape</label></li>
+                    </ul>
+                </div>
+                <div class="row">
+                    <label class="title">Options</label>
+                    <ul class="options">
+                        <li class="option active tool" id="brush"><img src="{{ url_for('static', filename='icons/brush.svg') }}"><span>Brush</span></li>
+                        <li class="option tool" id="eraser"><img src="{{ url_for('static', filename='icons/eraser.svg') }}"><span>Eraser</span></li>
+                        <li class="option"><input type="range" id="size-slider" min="1" max="30" value="5"></li>
+                    </ul>
+                </div>
+                <div class="row colors">
+                    <label class="title">Colors</label>
+                    <ul class="options">
+                        <li class="option"></li>
+                        <li class="option selected"></li>
+                        <li class="option"></li>
+                        <li class="option"></li>
+                        <li class="option"><input type="color" id="color-picker" value="#4A98F7"></li>
+                    </ul>
+                </div>
+                <div class="row buttons">
+                    <button id="undo-btn">Undo</button>
+                    <button id="redo-btn">Redo</button>
+                    <button class="clear-canvas">Clear Workspace</button>
+                    <button class="save-img">Save Drawing</button>
+                </div>
+            </section>
+            <section class="drawing-board">
+                <canvas id="canvas"></canvas>
+            </section>
+        </div>
+
+        <!-- Questions -->
+        <div class="questions">
+            <h2>Questions</h2>
+            <form id="landmarks-form">
+                <label for="landmark-list">
+                    Please list all the landmarks you included in your drawing in the order they are seen in the observations.
+                    <br>
+                    Below are some suggested landmarks that you can overwrite, reorder, or delete.
+                </label>
+                <ul id="landmark-list">
+                    <!-- Landmarks will be injected dynamically via JS -->
+                </ul>
+                <input type="hidden" name="landmarks" id="landmarks-input">
+                <button type="button" id="save-landmarks-btn">Save Landmarks</button>
+            </form>
+        </div>
+
+        <button type="button" id="submit-all-btn" style="display:block;margin:auto;">Submit All</button>
+        <button type="button" id="save-btn">Save & Next</button>
+    </div>
+
+    <div id="done-page" class="page">
+        <h2>Thanks for your help!</h2>
+        <button id="new-batch-btn">Do another batch</button>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/app.js') }}" defer></script>
+</body>
+</html>

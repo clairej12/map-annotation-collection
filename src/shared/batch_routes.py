@@ -2,7 +2,7 @@ import os, base64
 from flask import jsonify
 from flask_login import login_required, current_user
 from sqlalchemy import func
-from src.models import db, Task, Response
+from src.shared.models import db, Task, Drawing, Landmark
 
 NUM_TASKS_PER_BATCH = 6
 def register_batch_routes(app):
@@ -29,13 +29,16 @@ def register_batch_routes(app):
         if current_user.inflight_batch:
             tasks = db.session.query(Task).filter(Task.id.in_(current_user.last_batch)).all()
         else:
-            subq = db.session.query(Response.task_id).filter_by(user_id=current_user.id)
+            if mode == "draw":
+                subq = db.session.query(Drawing.task_id).filter_by(user_id=current_user.id)
+            else:
+                subq = db.session.query(Landmark.task_id).filter_by(user_id=current_user.id)
 
             if mode == "draw":
-                # draw study: pick routes user hasn't answered (same as your current logic)
+                # draw study: pick routes user hasn't answered
                 least_id_per_route = (
                     db.session.query(Task.route_id, func.max(Task.id).label("max_id"))
-                    .filter(Task.served_count == 0)
+                    .filter(Task.served_count_draw == 0)
                     .filter(~Task.id.in_(subq))
                     .group_by(Task.route_id)
                     .subquery()
@@ -49,18 +52,19 @@ def register_batch_routes(app):
                 )
 
             else:
-                # landmark study: pick tasks that HAVE a drawing from someone (Response.drawing_path exists),
+                # landmark study: pick tasks that HAVE a drawing from someone,
                 # and that THIS user hasn't already landmarked.
-                # This assumes a Response row exists when a drawing is saved.
+                # This assumes a Drawing row exists when a drawing is saved.
                 drawn_task_ids = (
-                    db.session.query(Response.task_id)
-                    .filter(Response.drawing_path.isnot(None))
+                    db.session.query(Drawing.task_id)
+                    .filter(Drawing.drawing_path.isnot(None))
                     .distinct()
                     .subquery()
                 )
                 tasks = (
                     Task.query
                     .filter(Task.id.in_(drawn_task_ids))
+                    .filter(Task.served_count_landmarks == 0)
                     .filter(~Task.id.in_(subq))  # user hasn't responded to these tasks yet
                     .order_by(Task.route_id)
                     .limit(NUM_TASKS_PER_BATCH)
@@ -78,8 +82,8 @@ def register_batch_routes(app):
         saved = {}
         if mode == "draw":
             # send back any saved drawing for this user (optional)
-            for r in Response.query.filter_by(user_id=current_user.id).filter(
-                Response.task_id.in_([t.id for t in tasks]),
+            for r in Drawing.query.filter_by(user_id=current_user.id).filter(
+                Drawing.task_id.in_([t.id for t in tasks]),
             ).all():
                 drawing = None
                 if r.drawing_path and os.path.exists(r.drawing_path):
@@ -92,10 +96,10 @@ def register_batch_routes(app):
             # simplest: pick the most recent drawing for that task.
             for t in tasks:
                 r = (
-                    Response.query
+                    Drawing.query
                     .filter_by(task_id=t.id)
-                    .filter(Response.drawing_path.isnot(None))
-                    .order_by(Response.timestamp.desc())
+                    .filter(Drawing.drawing_path.isnot(None))
+                    .order_by(Drawing.timestamp.desc())
                     .first()
                 )
                 drawing_url = None
