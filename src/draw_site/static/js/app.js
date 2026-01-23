@@ -226,6 +226,19 @@ function show(pageId) {
 
   state.currentPage = pageId;
   saveState();
+
+  if (pageId === "task-page") {
+    requestAnimationFrame(() => {
+      const t = batch?.[state.tIdx];
+      if (t && t.task_id) {
+        loadDrawingForTask(t.task_id);
+        restoreTextBoxesForTask(t.task_id);
+      } else if (canvas && ctx) {
+        resizeCanvasToDisplay();
+        setCanvasBackground();
+      }
+    });
+  }
 }
 
 // ------------------ Render Quiz ------------------
@@ -1050,6 +1063,7 @@ let drawingBoard = null;
 /* Helper to check if canvas is empty */
 function isCanvasBlank(c) {
   console.log("Checking if canvas is blank");
+  if (!c.width || !c.height) return true;
   const ctx = c.getContext('2d');
   const pixelBuf = new Uint32Array(
     ctx.getImageData(0, 0, c.width, c.height).data.buffer
@@ -1067,6 +1081,7 @@ function getCanvasCssSize() {
 function resizeCanvasToDisplay() {
   const rect = canvas.getBoundingClientRect();
   const dpr = window.devicePixelRatio || 1;
+  if (!rect.width || !rect.height) return;
 
   // Match internal buffer to what the user actually sees
   canvas.width = Math.round(rect.width * dpr);
@@ -1083,6 +1098,16 @@ function getMousePos(e) {
     x: (e.clientX - rect.left),
     y: (e.clientY - rect.top)
   };
+}
+
+function ensureCanvasReady() {
+  if (!canvas || !ctx) return false;
+  if (!canvas.width || !canvas.height) {
+    resizeCanvasToDisplay();
+    if (!canvas.width || !canvas.height) return false;
+    setCanvasBackground();
+  }
+  return true;
 }
 
 /* Background */
@@ -1189,6 +1214,7 @@ const drawTriangle = (pos) => {
 
 /* Start drawing (brush/eraser) or shape */
 const startDraw = (e) => {
+  if (!ensureCanvasReady()) return;
   isDrawing = true;
   hasDrawn = true;
   const pos = getMousePos(e);
