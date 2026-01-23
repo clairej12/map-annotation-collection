@@ -207,6 +207,15 @@ body {
     max-height: 100vh;  
 }
 
+.drawing-note {
+    margin: 0.5rem 0 0.75rem;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid #ddd;
+    background: #f9f9f9;
+    border-radius: 4px;
+    font-size: 0.95rem;
+}
+
 .tools-board {
     width: 25%;
     padding: 10px;
