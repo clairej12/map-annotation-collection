@@ -28,8 +28,8 @@ class Task(db.Model):
     landmarks     = db.Column(db.JSON, default=list)
     endpoints     = db.Column(db.JSON, default=list)
 
-    drawings      = db.relationship("Drawing", backref="task", lazy=True)
-    landmarks     = db.relationship("Landmark", backref="task", lazy=True)
+    drawing_responses      = db.relationship("Drawing", backref="task", lazy=True)
+    landmark_responses     = db.relationship("Landmark", backref="task", lazy=True)
 
 class Drawing(db.Model):
     id              = db.Column(db.Integer, primary_key=True)
