@@ -98,3 +98,59 @@ def register_shared_routes(app):
         else:
             completion_url = "https://app.prolific.com/submissions/complete?cc=C170KQM0"
         return jsonify({"status": "ok", "completion_url": completion_url})
+
+    @app.route("/check_quiz", methods=["POST"])
+    @login_required
+    def check_quiz():
+        data = request.get_json(silent=True) or {}
+        user_order = data.get("order", [])
+
+        correct_orders = [
+            [
+                "Start (S)",
+                "First intersection with crosswalks",
+                "Second intersection with crosswalks",
+                "Point B",
+                "Third intersection with cross walks",
+                "Pass through fourth intersection with cross walks",
+                "Turn onto alleyway",
+                "Parking spots on either side of the street",
+                "Point C",
+                "Tall brick buildings on either side",
+                "Pass through fifth intersection with crosswalks",
+                "Turn onto Public Alley",
+                "Parking spots on either side of the street",
+                "Point A",
+                "Turn out of alleyway",
+                "Pass through sixth intersection with crosswalks",
+                "Pass seventh intersection with crosswalks",
+                "Park with grass and trees on either side of the street",
+                "Turn at eighth intersection with crosswalks",
+                "End (G)",
+            ],
+            [
+                "Start (S)",
+                "First intersection with crosswalks",
+                "Second intersection with crosswalks",
+                "Point B",
+                "Third intersection with cross walks",
+                "Pass through fourth intersection with cross walks",
+                "Turn onto alleyway",
+                "Parking spots on either side of the street",
+                "Point C",
+                "Tall brick buildings on either side",
+                "Pass through fifth intersection with crosswalks",
+                "Turn onto Public Alley",
+                "Point A",
+                "Parking spots on either side of the street",
+                "Turn out of alleyway",
+                "Pass through sixth intersection with crosswalks",
+                "Pass seventh intersection with crosswalks",
+                "Park with grass and trees on either side of the street",
+                "Turn at eighth intersection with crosswalks",
+                "End (G)",
+            ],
+        ]
+
+        is_correct = any(user_order == correct for correct in correct_orders)
+        return jsonify({"correct": is_correct})
