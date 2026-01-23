@@ -50,6 +50,12 @@
 
     <h2>Example</h2>
     <div id="example-container" class="example">
+      <div class="example-observations" style="margin-top:1rem;">
+        <h4>Example Observations</h4>
+        <video id="example-obs-video" width="100%" controls preload="metadata">
+          <source src="{{ url_for('serve_video', filename='rid_72.mp4') }}" type="video/mp4">
+        </video>
+      </div>
       <div class="example-maps">
         <div>
           <h4>Satellite Map</h4>
@@ -63,13 +69,6 @@
                alt="Example sketch map"
                style="max-width:100%;border:1px solid #ccc;">
         </div>
-      </div>
-
-      <div class="example-observations" style="margin-top:1rem;">
-        <h4>Example Observations</h4>
-        <video id="example-obs-video" width="100%" controls preload="metadata">
-          <source src="{{ url_for('serve_video', filename='rid_72.mp4') }}" type="video/mp4">
-        </video>
       </div>
     </div>
 
