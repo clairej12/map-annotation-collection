@@ -171,6 +171,7 @@ def register_answer_routes(app):
                 "task_id": task_id,
                 "drawing_path": getattr(entry, "drawing_path", None),
                 "landmarks": landmarks,
+                "mode": mode,
                 "task_metrics": incoming_task_metrics,
                 "timestamp": ts.isoformat(),
                 "prolific": current_user.hit_id,
@@ -178,6 +179,7 @@ def register_answer_routes(app):
             data.append(entry_data)
         else:
             entry_data["landmarks"] = landmarks
+            entry_data["mode"] = mode
             prev_file_metrics = entry_data.get("task_metrics") if isinstance(entry_data.get("task_metrics"), dict) else {}
             entry_data["task_metrics"] = _merge_metrics(prev_file_metrics, incoming_task_metrics)
             entry_data["timestamp"] = ts.isoformat()

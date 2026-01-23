@@ -214,6 +214,7 @@ body {
     background: #f9f9f9;
     border-radius: 4px;
     font-size: 0.95rem;
+    width: 100%;
 }
 
 .tools-board {
