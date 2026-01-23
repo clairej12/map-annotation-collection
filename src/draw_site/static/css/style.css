@@ -33,18 +33,18 @@ body {
 
 /* Make the map larger than the video in the quiz */
 .quiz-map {
-  flex: 1 1 60%;
-  min-width: 320px;
+  flex: 1 1 30%;
+  min-width: 350px;
 }
 
 .quiz-observations {
-  flex: 1 1 38%;
-  max-width: 480px;
+  flex: 1 1 70%;
+  max-width: 600px;
 }
 
 .quiz-observations video {
   width: 100%;
-  max-height: 320px;
+  max-height: 400px;
 }
 
 @media (min-width: 900px) {
