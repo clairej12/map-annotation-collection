@@ -12,5 +12,6 @@ wheels/
 # Images
 data/
 instance/
-user_answers/
-user_drawings/
+*user_answers/
+*user_drawings/
+*user_landmarks/
