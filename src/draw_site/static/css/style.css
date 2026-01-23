@@ -26,25 +26,31 @@ body {
   display: flex;
   justify-content: center;
   align-items: flex-start;
-  gap: 2rem;       /* space between map + observations */
+  gap: 1rem;       /* space between map + observations */
   margin: 1rem 0;
   flex-wrap: wrap; /* allows stacking on small screens */
 }
 
 /* Make the map larger than the video in the quiz */
 .quiz-map {
-  flex: 1 1 62%;
+  flex: 1 1 60%;
   min-width: 320px;
 }
 
 .quiz-observations {
-  flex: 1 1 35%;
-  max-width: 420px;
+  flex: 1 1 38%;
+  max-width: 480px;
 }
 
 .quiz-observations video {
   width: 100%;
-  max-height: 260px;
+  max-height: 320px;
+}
+
+@media (min-width: 900px) {
+  .quiz-visuals {
+    flex-wrap: nowrap;
+  }
 }
 
 /* Shared image styling */
