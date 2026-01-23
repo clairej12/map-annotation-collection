@@ -93,6 +93,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   // Show whatever page we were on last
   show(state.currentPage);
+  setupQuizMapZoom();
 
   // Reattach batch / savedAns from state if present
   if (Array.isArray(state.batch) && state.batch.length > 0) {
@@ -121,6 +122,25 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   console.log("State after restoration/initial load:", state);
 });
+
+function setupQuizMapZoom() {
+  const img = document.getElementById("quiz-map-img");
+  if (!img) return;
+
+  const updateOrigin = (e) => {
+    const rect = img.getBoundingClientRect();
+    const x = ((e.clientX - rect.left) / rect.width) * 100;
+    const y = ((e.clientY - rect.top) / rect.height) * 100;
+    img.style.transformOrigin = `${x}% ${y}%`;
+  };
+
+  img.addEventListener("mouseenter", () => img.classList.add("zoomed"));
+  img.addEventListener("mouseleave", () => {
+    img.classList.remove("zoomed");
+    img.style.transformOrigin = "50% 50%";
+  });
+  img.addEventListener("mousemove", updateOrigin);
+}
 
 // ------------------ Clear Local State (Dev only) + Dev Shortcuts ------------------
 document.addEventListener("keydown", async e => {

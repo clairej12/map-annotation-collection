@@ -35,6 +35,7 @@ body {
 .quiz-map {
   flex: 1 1 30%;
   min-width: 350px;
+  overflow: hidden; /* keeps zoomed image contained */
 }
 
 .quiz-observations {
@@ -64,6 +65,14 @@ body {
   border-radius: 4px;
   display: block;
   margin: 0 auto;
+  transform-origin: 50% 50%;
+  transition: transform 120ms ease-out;
+  cursor: zoom-in;
+}
+
+.quiz-img.zoomed {
+  transform: scale(1.6);
+  cursor: zoom-out;
 }
 
 /* Landmarks page: keep saved sketch map from taking over the screen */

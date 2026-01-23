@@ -2,7 +2,7 @@ import os, base64
 from flask import jsonify
 from flask_login import login_required, current_user
 from sqlalchemy import func
-from src.shared.models import db, Task, Drawing, Landmark
+from src.shared.models import db, Task, Drawing, Landmark, User
 
 NUM_TASKS_PER_BATCH = 6
 def register_batch_routes(app):
@@ -72,7 +72,7 @@ def register_batch_routes(app):
                 )
 
             last_batch = [t.id for t in tasks]
-            db.session.query(type(current_user)).filter_by(id=current_user.id).update({
+            db.session.query(User).filter_by(id=current_user.id).update({
                 "last_batch": last_batch,
                 "inflight_batch": True
             })
