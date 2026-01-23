@@ -31,10 +31,26 @@ body {
   flex-wrap: wrap; /* allows stacking on small screens */
 }
 
+/* Make the map larger than the video in the quiz */
+.quiz-map {
+  flex: 1 1 62%;
+  min-width: 320px;
+}
+
+.quiz-observations {
+  flex: 1 1 35%;
+  max-width: 420px;
+}
+
+.quiz-observations video {
+  width: 100%;
+  max-height: 260px;
+}
+
 /* Shared image styling */
 .quiz-img {
-  max-width: 500px;
-  max-height: 400px;
+  max-width: 700px;
+  max-height: 520px;
   width: auto;
   height: auto;
   object-fit: contain;
