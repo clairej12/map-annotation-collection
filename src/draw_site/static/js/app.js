@@ -8,7 +8,7 @@ const IS_LANDMARK = APP_MODE === "landmark";
 const STORAGE_KEY = "drawSiteState";
 const AUTOSAVE_INTERVAL_MS = 10000;
 const UNDO_LIMIT = 10;
-const MAX_QUIZ_ATTEMPTS = 3;
+const MAX_QUIZ_ATTEMPTS = 5;
 const PROLIFIC_SCREENOUT_URL = "https://app.prolific.com/submissions/complete?cc=C170KQM0"
 
 /* ---------------- In-memory state ---------------- */
