@@ -82,5 +82,5 @@ def save_drawing():
 
 
 """
-gunicorn --bind 0.0.0.0:5000 src.draw_app:app
+gunicorn --bind 0.0.0.0:5000 src.draw_site.draw_app:app
 """
