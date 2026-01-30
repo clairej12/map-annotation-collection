@@ -265,75 +265,124 @@ const exampleLandmarks = [
   "Turn at eighth intersection with crosswalks",
   "End (G)"
 ];
-const misorderedLandmarks = [
-  "First intersection with crosswalks",
-  "Second intersection with crosswalks",
-  "Third intersection with cross walks",
-  "Pass through fourth intersection with cross walks",
-  "Turn onto alleyway",
-  "Parking spots on either side of the street",
-  "Tall brick buildings on either side",
-  "Pass through fifth intersection with crosswalks",
-  "Turn onto Public Alley",
-  "Parking spots on either side of the street",
-  "Turn out of alleyway",
-  "Pass through sixth intersection with crosswalks",
-  "Pass seventh intersection with crosswalks",
-  "Park with grass and trees on either side of the street",
-  "Turn at eighth intersection with crosswalks",
-  "Point C",
-  "Point B",
-  "Point A",
+const movableQuizItems = [
   "Start (S)",
+  "Point A",
+  "Point B",
+  "Point C",
   "End (G)"
 ];
+const movableQuizSet = new Set(movableQuizItems);
+
+function createBankItem(text) {
+  const li = document.createElement("li");
+  li.textContent = text;
+  li.className = "quiz-draggable";
+  li.draggable = true;
+  li.dataset.value = text;
+  return li;
+}
+
+function clearSlot(slot) {
+  slot.dataset.value = "";
+  slot.textContent = "Drop here";
+  slot.classList.remove("filled");
+}
 // Render shuffled landmarks into quiz list
 function renderQuizLandmarks() {
-  const quizList = document.getElementById("quiz-landmark-list");
-  quizList.innerHTML = "";
-  misorderedLandmarks.forEach(text => {
+  const fixedList = document.getElementById("quiz-fixed-list");
+  const bankList = document.getElementById("quiz-draggable-list");
+  if (!fixedList || !bankList) return;
+
+  fixedList.innerHTML = "";
+  bankList.innerHTML = "";
+
+  exampleLandmarks.forEach(text => {
     const li = document.createElement("li");
-    li.textContent = text;
-    li.draggable = true;
-    quizList.appendChild(li);
+    if (movableQuizSet.has(text)) {
+      li.className = "quiz-slot";
+      li.dataset.placeholder = text;
+      clearSlot(li);
+    } else {
+      li.className = "quiz-fixed-item";
+      li.textContent = text;
+    }
+    fixedList.appendChild(li);
+  });
+
+  movableQuizItems.forEach(text => {
+    bankList.appendChild(createBankItem(text));
   });
 }
 renderQuizLandmarks();
 
 // Drag & drop behavior
-let draggedItem = null;
+let draggedValue = null;
+let draggedEl = null;
 
 document.addEventListener("dragstart", e => {
-  if (e.target.tagName === "LI") {
-    draggedItem = e.target;
-    e.target.style.opacity = "0.5";
-  }
+  const item = e.target.closest(".quiz-draggable");
+  if (!item) return;
+  draggedEl = item;
+  draggedValue = item.dataset.value || item.textContent;
+  item.style.opacity = "0.5";
+  e.dataTransfer.setData("text/plain", draggedValue);
 });
 
 document.addEventListener("dragend", e => {
-  if (e.target.tagName === "LI") {
-    draggedItem.style.opacity = "";
-    draggedItem = null;
-  }
+  if (draggedEl) draggedEl.style.opacity = "";
+  draggedEl = null;
+  draggedValue = null;
 });
 
 document.addEventListener("dragover", e => {
-  e.preventDefault();
-  const quizList = document.getElementById("quiz-landmark-list");
-  if (e.target.tagName === "LI" && quizList.contains(e.target)) {
-    const rect = e.target.getBoundingClientRect();
-    const offset = e.clientY - rect.top;
-    if (offset > rect.height / 2) {
-      e.target.parentNode.insertBefore(draggedItem, e.target.nextSibling);
-    } else {
-      e.target.parentNode.insertBefore(draggedItem, e.target);
+  const slot = e.target.closest(".quiz-slot");
+  const bank = e.target.closest("#quiz-draggable-list");
+  if (slot || bank) e.preventDefault();
+});
+
+document.addEventListener("drop", e => {
+  const slot = e.target.closest(".quiz-slot");
+  const bank = e.target.closest("#quiz-draggable-list");
+  if (!draggedValue) return;
+
+  if (slot) {
+    e.preventDefault();
+    if (slot.dataset.value) {
+      bank?.appendChild(createBankItem(slot.dataset.value));
     }
+    slot.dataset.value = draggedValue;
+    slot.textContent = draggedValue;
+    slot.classList.add("filled");
+    if (draggedEl) draggedEl.remove();
+  } else if (bank) {
+    e.preventDefault();
+  }
+});
+
+document.addEventListener("click", e => {
+  const slot = e.target.closest(".quiz-slot");
+  const bank = document.getElementById("quiz-draggable-list");
+  if (!slot || !bank) return;
+  if (slot.dataset.value) {
+    bank.appendChild(createBankItem(slot.dataset.value));
+    clearSlot(slot);
   }
 });
 
 document.getElementById("submit-quiz-btn").onclick = async () => {
-  const quizList = document.querySelectorAll("#quiz-landmark-list li");
-  const order = Array.from(quizList).map(li => li.textContent);
+  const quizList = document.querySelectorAll("#quiz-fixed-list li");
+  const order = Array.from(quizList).map(li => {
+    if (li.classList.contains("quiz-slot")) {
+      return li.dataset.value || "";
+    }
+    return li.textContent;
+  });
+
+  if (order.includes("")) {
+    alert("Please place all five labels before submitting.");
+    return;
+  }
 
   try {
     const res = await fetch("/check_quiz", {

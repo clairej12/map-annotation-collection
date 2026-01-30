@@ -20,6 +20,11 @@ def register_shared_routes(app):
         internal_hit_id = f"{prolific_pid}_{prolific_session_id}_{prolific_study_id}"
 
         user = User.query.filter_by(hit_id=internal_hit_id).first()
+        max_users = app.config.get("MAX_CONCURRENT_USERS", 0)
+        if max_users and not (user and user.inflight_batch):
+            inflight = User.query.filter_by(inflight_batch=True).count()
+            if inflight >= max_users:
+                return "Too many people on the study currently. Please come back later.", 429
         if not user:
             user = User(hit_id=internal_hit_id)
 

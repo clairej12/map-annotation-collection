@@ -93,8 +93,15 @@
     </div>
 
     <div id="quiz-content">
-      <h3>Drag and drop Start, End, and Points A/B/C into the correct positions…</h3>
-      <ul id="quiz-landmark-list"></ul>
+      <p class="quiz-note">The video is optional for the quiz; the map alone is sufficient.</p>
+      <h3>Drag Start, End, and Points A/B/C from the right into the empty slots on the left.</h3>
+      <div class="quiz-lists">
+        <ul id="quiz-fixed-list"></ul>
+        <div class="quiz-bank">
+          <h4>Drag these labels</h4>
+          <ul id="quiz-draggable-list"></ul>
+        </div>
+      </div>
       <button id="submit-quiz-btn">Submit</button>
       <div id="quiz-feedback" style="margin-top:1rem;font-weight:bold;"></div>
     </div>
