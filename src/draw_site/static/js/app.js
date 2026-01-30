@@ -302,10 +302,12 @@ function renderQuizLandmarks() {
     if (movableQuizSet.has(text)) {
       li.className = "quiz-slot";
       li.dataset.placeholder = text;
+      li.draggable = false;
       clearSlot(li);
     } else {
       li.className = "quiz-fixed-item";
       li.textContent = text;
+      li.draggable = false;
     }
     fixedList.appendChild(li);
   });
