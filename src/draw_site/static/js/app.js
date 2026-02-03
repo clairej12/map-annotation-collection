@@ -42,6 +42,7 @@ let state = {
   landmarks: {},        // map task_id -> array of strings
   metricsByTask: {},   // <-- ADD
   textBoxesByTask: {}, 
+  markersByTask: {},
 };
 
 // Restore from localStorage
@@ -56,6 +57,7 @@ function normalizeState() {
   state.batch = state.batch || [];
   state.savedAns = state.savedAns || {};
   state.textBoxesByTask = state.textBoxesByTask || {};
+  state.markersByTask = state.markersByTask || {};
   if (typeof state.tIdx !== "number") state.tIdx = 0;
   if (!state.currentPage) state.currentPage = "instr-page";
   if (state.currentPage === "landmark-page") state.currentPage = "task-page";
@@ -156,6 +158,8 @@ document.addEventListener("keydown", async e => {
       drawings: {},      // map task_id -> base64 image (finalized)
       drawing_paths: {},
       landmarks: {},      // map task_id -> array of strings
+      textBoxesByTask: {},
+      markersByTask: {},
     };
     alert("Local state cleared");
     return;
@@ -233,6 +237,7 @@ function show(pageId) {
       if (t && t.task_id) {
         loadDrawingForTask(t.task_id);
         restoreTextBoxesForTask(t.task_id);
+        restoreMarkersForTask(t.task_id);
       } else if (canvas && ctx) {
         resizeCanvasToDisplay();
         setCanvasBackground();
@@ -1093,6 +1098,7 @@ const fillColor = document.querySelector("#fill-color");
 const sizeSlider = document.querySelector("#size-slider");
 const colorBtns = document.querySelectorAll(".colors .option");
 const colorPicker = document.querySelector("#color-picker");
+const markerBtns = document.querySelectorAll(".marker-btn");
 const clearCanvasBtn = document.querySelector(".clear-canvas");
 const saveImgBtn = document.querySelector(".save-img");
 const undoBtn = document.getElementById("undo-btn");
@@ -1110,11 +1116,13 @@ let eraserWidth = 15;  // will be kept in sync with baseWidth
 
 let selectedColor = "#000";
 let drawingBoard = null;
+let selectedMarker = null;
 
 /* Helper to check if canvas is empty */
 function isCanvasBlank(c) {
   console.log("Checking if canvas is blank");
   if (!c.width || !c.height) return true;
+  if (document.querySelector(".text-box, .marker-stamp")) return false;
   const ctx = c.getContext('2d');
   const pixelBuf = new Uint32Array(
     ctx.getImageData(0, 0, c.width, c.height).data.buffer
@@ -1197,6 +1205,7 @@ function commitCurrentDrawing(taskId) {
 
   // 1) persist DOM → state
   saveTextBoxesForTask(taskId);
+  saveMarkersForTask(taskId);
 
   // 2) snapshot canvas pixels (no flatten)
   commitDrawingSnapshotToState(taskId);
@@ -1266,6 +1275,14 @@ const drawTriangle = (pos) => {
 /* Start drawing (brush/eraser) or shape */
 const startDraw = (e) => {
   if (!ensureCanvasReady()) return;
+  if (selectedTool === "marker") {
+    if (!selectedMarker) return;
+    const pos = getMousePos(e);
+    createMarkerStamp(pos.x, pos.y, selectedMarker);
+    const t = batch[state.tIdx];
+    if (t && t.task_id) saveMarkersForTask(t.task_id);
+    return;
+  }
   isDrawing = true;
   hasDrawn = true;
   const pos = getMousePos(e);
@@ -1329,6 +1346,12 @@ function ensureTextBoxStore(taskId) {
   return state.textBoxesByTask[taskId];
 }
 
+function ensureMarkerStore(taskId) {
+  state.markersByTask = state.markersByTask || {};
+  state.markersByTask[taskId] = state.markersByTask[taskId] || [];
+  return state.markersByTask[taskId];
+}
+
 function getCurrentTaskId() {
   const t = batch?.[state.tIdx];
   return t?.task_id || null;
@@ -1360,8 +1383,42 @@ function saveTextBoxesForTask(taskId) {
   saveState();
 }
 
+function saveMarkersForTask(taskId) {
+  if (!taskId || !drawingBoard) return;
+
+  const canvasRect = canvas.getBoundingClientRect();
+
+  const markers = Array.from(document.querySelectorAll(".marker-stamp"));
+  const serialized = markers.map((marker) => {
+    const id =
+      marker.dataset.tid ||
+      (crypto.randomUUID?.() || String(Date.now() + Math.random()));
+    marker.dataset.tid = id;
+
+    const boxRect = marker.getBoundingClientRect();
+    const left = boxRect.left - canvasRect.left;
+    const top = boxRect.top - canvasRect.top;
+
+    return {
+      id,
+      left,
+      top,
+      width: boxRect.width,
+      height: boxRect.height,
+      src: marker.dataset.src || "",
+    };
+  });
+
+  state.markersByTask[taskId] = serialized;
+  saveState();
+}
+
 function clearTextBoxesFromDOM() {
   document.querySelectorAll(".text-box").forEach(b => b.remove());
+}
+
+function clearMarkersFromDOM() {
+  document.querySelectorAll(".marker-stamp").forEach(m => m.remove());
 }
 
 function restoreTextBoxesForTask(taskId) {
@@ -1372,6 +1429,22 @@ function restoreTextBoxesForTask(taskId) {
   const saved = state.textBoxesByTask?.[taskId] || [];
   saved.forEach(tb => {
     createTextBox(tb.left, tb.top, { id: tb.id, text: tb.text, focus: false });
+  });
+}
+
+function restoreMarkersForTask(taskId) {
+  if (!taskId || !drawingBoard) return;
+
+  clearMarkersFromDOM();
+
+  const saved = state.markersByTask?.[taskId] || [];
+  saved.forEach(m => {
+    createMarkerStamp(m.left, m.top, m.src, {
+      id: m.id,
+      width: m.width,
+      height: m.height,
+      focus: false,
+    });
   });
 }
 
@@ -1431,12 +1504,64 @@ function createTextBox(x, y, opts = {}) {
   return textBox;
 }
 
+function createMarkerStamp(x, y, src, opts = {}) {
+  const taskId = getCurrentTaskId();
+  if (!src) return null;
+
+  const boardRect = drawingBoard.getBoundingClientRect();
+  const canvasRect = canvas.getBoundingClientRect();
+
+  const leftInBoard = (canvasRect.left - boardRect.left) + x;
+  const topInBoard  = (canvasRect.top  - boardRect.top)  + y;
+
+  const marker = document.createElement("div");
+  marker.className = "marker-stamp";
+  marker.style.left = `${leftInBoard}px`;
+  marker.style.top = `${topInBoard}px`;
+  marker.style.width = `${opts.width || 48}px`;
+  marker.style.height = `${opts.height || 48}px`;
+  marker.dataset.tid = opts.id || (crypto.randomUUID?.() || String(Date.now() + Math.random()));
+  marker.dataset.src = src;
+
+  const img = document.createElement("img");
+  img.src = BASE + "/static/" + src;
+  img.alt = "marker";
+  marker.appendChild(img);
+
+  const closeBtn = document.createElement("button");
+  closeBtn.type = "button";
+  closeBtn.className = "close-btn";
+  closeBtn.textContent = "✕";
+  closeBtn.onclick = () => {
+    marker.remove();
+    if (taskId) saveMarkersForTask(taskId);
+  };
+
+  const resizeHandle = document.createElement("div");
+  resizeHandle.className = "marker-resize";
+
+  marker.appendChild(closeBtn);
+  marker.appendChild(resizeHandle);
+  drawingBoard.appendChild(marker);
+
+  makeDraggable(marker, () => {
+    if (taskId) saveMarkersForTask(taskId);
+  });
+  makeResizable(marker, resizeHandle, () => {
+    if (taskId) saveMarkersForTask(taskId);
+  });
+
+  return marker;
+}
+
 function makeDraggable(el, onDragEnd) {
   let offsetX = 0, offsetY = 0, isDragging = false;
 
   el.addEventListener("mousedown", (e) => {
     // Only drag when clicking the outer box (not when editing text)
     if (e.target.closest(".text-content")) return;
+    if (e.target.closest(".marker-resize")) return;
+    if (e.target.closest(".close-btn")) return;
 
     isDragging = true;
     const r = el.getBoundingClientRect();
@@ -1474,8 +1599,40 @@ function makeDraggable(el, onDragEnd) {
   window.addEventListener("mouseup", () => {
     if (!isDragging) return;
     isDragging = false;
-    el.style.cursor = "text";
+    el.style.cursor = el.classList.contains("text-box") ? "text" : "move";
     if (typeof onDragEnd === "function") onDragEnd();
+  });
+}
+
+function makeResizable(el, handleEl, onResizeEnd) {
+  let isResizing = false;
+  let startX = 0, startY = 0;
+  let startW = 0, startH = 0;
+
+  handleEl.addEventListener("mousedown", (e) => {
+    isResizing = true;
+    const r = el.getBoundingClientRect();
+    startX = e.clientX;
+    startY = e.clientY;
+    startW = r.width;
+    startH = r.height;
+    e.preventDefault();
+    e.stopPropagation();
+  });
+
+  window.addEventListener("mousemove", (e) => {
+    if (!isResizing) return;
+    const dx = e.clientX - startX;
+    const dy = e.clientY - startY;
+    const size = Math.max(20, Math.min(240, Math.max(startW + dx, startH + dy)));
+    el.style.width = `${size}px`;
+    el.style.height = `${size}px`;
+  });
+
+  window.addEventListener("mouseup", () => {
+    if (!isResizing) return;
+    isResizing = false;
+    if (typeof onResizeEnd === "function") onResizeEnd();
   });
 }
 
@@ -1523,6 +1680,20 @@ function exportPngWithText() {
     lines.forEach((line, i) => octx.fillText(line, x, y + i * lineH));
   });
 
+  const markers = document.querySelectorAll(".marker-stamp");
+  markers.forEach(marker => {
+    const img = marker.querySelector("img");
+    if (!img || !img.complete) return;
+
+    const boxRect = marker.getBoundingClientRect();
+    const x = (boxRect.left - rect.left) * scaleX;
+    const y = (boxRect.top - rect.top) * scaleY;
+    const w = boxRect.width * scaleX;
+    const h = boxRect.height * scaleY;
+
+    octx.drawImage(img, x, y, w, h);
+  });
+
   return out.toDataURL("image/png");
 }
 
@@ -1545,6 +1716,20 @@ toolBtns.forEach(btn => {
     if (prev) prev.classList.remove("active");
     btn.classList.add("active");
     selectedTool = btn.id; // expects btn.id to equal a tool name: brush, eraser, rectangle, circle, triangle
+    selectedMarker = null;
+    markerBtns.forEach(m => m.classList.remove("active"));
+  });
+});
+
+markerBtns.forEach(btn => {
+  btn.addEventListener("click", () => {
+    markerBtns.forEach(m => m.classList.remove("active"));
+    btn.classList.add("active");
+    selectedTool = "marker";
+    selectedMarker = btn.dataset.marker || "";
+
+    const prev = document.querySelector(".tool.active");
+    if (prev) prev.classList.remove("active");
   });
 });
 
@@ -1654,6 +1839,7 @@ if (canvas && ctx) {
 
       const oldRect = canvas.getBoundingClientRect();
       if (taskId) saveTextBoxesForTask(taskId);
+      if (taskId) saveMarkersForTask(taskId);
 
       const dataUrl = canvas.toDataURL("image/png");
 
@@ -1678,6 +1864,15 @@ if (canvas && ctx) {
         saveState();
 
         restoreTextBoxesForTask(taskId);
+        const savedMarkers = ensureMarkerStore(taskId);
+        savedMarkers.forEach(m => {
+          m.left *= sx;
+          m.top  *= sy;
+          m.width *= sx;
+          m.height *= sy;
+        });
+        saveState();
+        restoreMarkersForTask(taskId);
 
         if (taskId) commitDrawingSnapshotToState(taskId);
       };
@@ -1715,6 +1910,7 @@ function initCanvas(t) {
   // load any saved drawing
   loadDrawingForTask(t.task_id);
   restoreTextBoxesForTask(t.task_id);
+  restoreMarkersForTask(t.task_id);
 
   // reset local flags
   hasDrawn = !!state.drawings[t.task_id];
@@ -1805,6 +2001,13 @@ if (goToLandmarksBtn && IS_DRAW) goToLandmarksBtn.addEventListener("click", asyn
   const gate = checkEffortRequirements(t.task_id);
   if (!gate.ok) {
     alert(gate.reason);
+    return;
+  }
+
+  saveMarkersForTask(t.task_id);
+  const markerGate = validateMarkersPresentOnce();
+  if (!markerGate.ok) {
+    alert(markerGate.reason);
     return;
   }
 
@@ -1925,6 +2128,36 @@ function checkEffortRequirements(taskId) {
   }
 
   return { ok: true, reason: "ok" };
+}
+
+function validateMarkersPresentOnce() {
+  const required = [
+    "icons/badge_S.png",
+    "icons/badge_A.png",
+    "icons/badge_B.png",
+    "icons/badge_C.png",
+    "icons/badge_G.png",
+  ];
+
+  const counts = Object.fromEntries(required.map(r => [r, 0]));
+  const markers = document.querySelectorAll(".marker-stamp");
+  markers.forEach(m => {
+    const src = m.dataset.src || "";
+    if (src in counts) counts[src] += 1;
+  });
+
+  const missing = required.filter(r => counts[r] === 0);
+  const dupes = required.filter(r => counts[r] > 1);
+
+  if (missing.length || dupes.length) {
+    const labels = (arr) => arr.map(s => s.replace("icons/badge_", "").replace(".png", ""));
+    let msg = "Please place each marker exactly once.";
+    if (missing.length) msg += ` Missing: ${labels(missing).join(", ")}.`;
+    if (dupes.length) msg += ` Duplicates: ${labels(dupes).join(", ")}.`;
+    return { ok: false, reason: msg };
+  }
+
+  return { ok: true };
 }
 
 // ------------------ Autosave ------------------
@@ -2156,6 +2389,13 @@ if (saveBtn) {
         return;
       }
 
+      saveMarkersForTask(t.task_id);
+      const markerGate = validateMarkersPresentOnce();
+      if (!markerGate.ok) {
+        alert(markerGate.reason);
+        return;
+      }
+
       commitCurrentDrawing(t.task_id);
       const png = exportPngWithText();
       const result = await saveDrawingToBackend(t.task_id, png);
@@ -2212,6 +2452,13 @@ if (submitAllBtn) {
           return;
         }
 
+        saveMarkersForTask(t.task_id);
+        const markerGate = validateMarkersPresentOnce();
+        if (!markerGate.ok) {
+          alert(markerGate.reason);
+          return;
+        }
+
         commitCurrentDrawing(t.task_id);
         const png = exportPngWithText();
         const result = await saveDrawingToBackend(t.task_id, png);
@@ -2258,6 +2505,7 @@ window.addEventListener("beforeunload", () => {
 
   // 1) Persist text boxes (DOM → state)
   saveTextBoxesForTask(taskId);
+  saveMarkersForTask(taskId);
 
   // 2) Persist canvas pixels (no flattening)
   commitDrawingSnapshotToState(taskId);

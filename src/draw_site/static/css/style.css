@@ -401,6 +401,63 @@ canvas {
   cursor: pointer;
 }
 
+/* Marker buttons */
+.marker-buttons {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.marker-btn {
+  border: 1px solid #ccc;
+  background: #fff;
+  border-radius: 6px;
+  padding: 4px;
+  cursor: pointer;
+}
+
+.marker-btn img {
+  width: 28px;
+  height: 28px;
+  display: block;
+}
+
+.marker-btn.active {
+  border-color: #007BFF;
+  box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.2);
+}
+
+/* Marker stamps on canvas */
+.marker-stamp {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 48px;
+  height: 48px;
+  cursor: move;
+  z-index: 6;
+}
+
+.marker-stamp img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  user-select: none;
+  pointer-events: none;
+}
+
+.marker-resize {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  right: -6px;
+  bottom: -6px;
+  background: #fff;
+  border: 1px solid #777;
+  border-radius: 2px;
+  cursor: se-resize;
+}
+
 .clear-canvas:hover{
   color: #fff;
   background: #6C757D;

@@ -175,6 +175,27 @@
           </ul>
         </div>
 
+        <div class="row markers">
+          <label class="title">Markers</label>
+          <div class="marker-buttons">
+            <button type="button" class="marker-btn" data-marker="icons/badge_S.png" aria-label="Place Start marker">
+              <img src="{{ url_for('static', filename='icons/badge_S.png') }}" alt="S marker">
+            </button>
+            <button type="button" class="marker-btn" data-marker="icons/badge_A.png" aria-label="Place A marker">
+              <img src="{{ url_for('static', filename='icons/badge_A.png') }}" alt="A marker">
+            </button>
+            <button type="button" class="marker-btn" data-marker="icons/badge_B.png" aria-label="Place B marker">
+              <img src="{{ url_for('static', filename='icons/badge_B.png') }}" alt="B marker">
+            </button>
+            <button type="button" class="marker-btn" data-marker="icons/badge_C.png" aria-label="Place C marker">
+              <img src="{{ url_for('static', filename='icons/badge_C.png') }}" alt="C marker">
+            </button>
+            <button type="button" class="marker-btn" data-marker="icons/badge_G.png" aria-label="Place Goal marker">
+              <img src="{{ url_for('static', filename='icons/badge_G.png') }}" alt="G marker">
+            </button>
+          </div>
+        </div>
+
         <div class="row buttons">
           <button id="undo-btn">Undo</button>
           <button id="redo-btn">Redo</button>
