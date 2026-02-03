@@ -436,6 +436,7 @@ canvas {
   height: 48px;
   cursor: move;
   z-index: 6;
+  padding-top: 6px;
 }
 
 .marker-stamp img {
@@ -468,6 +469,20 @@ canvas {
   border: 1px solid #777;
   border-radius: 9px;
   box-shadow: 0 1px 2px rgba(0,0,0,0.15);
+  top: -10px;
+  right: -10px;
+}
+
+.marker-resize::after {
+  content: "";
+  position: absolute;
+  width: 0;
+  height: 0;
+  right: 1px;
+  bottom: 1px;
+  border-style: solid;
+  border-width: 0 0 8px 8px;
+  border-color: transparent transparent #666 transparent;
 }
 
 .clear-canvas:hover{
