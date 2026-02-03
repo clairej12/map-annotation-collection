@@ -456,6 +456,18 @@ canvas {
   border: 1px solid #777;
   border-radius: 2px;
   cursor: se-resize;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.15);
+  background-image: repeating-linear-gradient(135deg, #666 0 2px, transparent 2px 4px);
+}
+
+.marker-stamp .close-btn {
+  width: 18px;
+  height: 18px;
+  line-height: 18px;
+  background: #fff;
+  border: 1px solid #777;
+  border-radius: 9px;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.15);
 }
 
 .clear-canvas:hover{
