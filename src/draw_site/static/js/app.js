@@ -1598,6 +1598,18 @@ function createTextBox(x, y, opts = {}) {
     }, 250);
   });
 
+  textContent.addEventListener("focus", () => {
+    textContent.dataset.typingStart = String(performance.now());
+  });
+
+  textContent.addEventListener("blur", () => {
+    const start = Number(textContent.dataset.typingStart || 0);
+    if (taskId && start) {
+      recordDrawingActiveMs(taskId, performance.now() - start);
+    }
+    textContent.dataset.typingStart = "";
+  });
+
   makeDraggable(textBox, () => {
     if (taskId) saveTextBoxesForTask(taskId);
   });
@@ -2339,7 +2351,7 @@ function recordDrawingActiveMs(taskId, deltaMs) {
   state.drawingActiveMsByTask[taskId] = next;
   saveState();
 
-  if (next >= 45000 && isMapLocked(taskId)) {
+  if (next >= 20000 && isMapLocked(taskId)) {
     setMapLocked(taskId, false);
     if (!state.mapUnlockedNotifiedByTask[taskId]) {
       state.mapUnlockedNotifiedByTask[taskId] = true;
