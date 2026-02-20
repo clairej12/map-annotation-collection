@@ -41,8 +41,13 @@ let state = {
   drawing_paths: {},
   landmarks: {},        // map task_id -> array of strings
   metricsByTask: {},   // <-- ADD
-  textBoxesByTask: {}, 
+  textBoxesByTask: {},
+  notesByTask: {},
   markersByTask: {},
+  mapLockByTask: {},
+  mapOrientationDoneByTask: {},
+  mapUnlockedNotifiedByTask: {},
+  drawingActiveMsByTask: {},
 };
 
 // Restore from localStorage
@@ -57,7 +62,12 @@ function normalizeState() {
   state.batch = state.batch || [];
   state.savedAns = state.savedAns || {};
   state.textBoxesByTask = state.textBoxesByTask || {};
+  state.notesByTask = state.notesByTask || {};
   state.markersByTask = state.markersByTask || {};
+  state.mapLockByTask = state.mapLockByTask || {};
+  state.mapOrientationDoneByTask = state.mapOrientationDoneByTask || {};
+  state.mapUnlockedNotifiedByTask = state.mapUnlockedNotifiedByTask || {};
+  state.drawingActiveMsByTask = state.drawingActiveMsByTask || {};
   if (typeof state.tIdx !== "number") state.tIdx = 0;
   if (!state.currentPage) state.currentPage = "instr-page";
   if (state.currentPage === "landmark-page") state.currentPage = "task-page";
@@ -123,6 +133,16 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
 
   console.log("State after restoration/initial load:", state);
+
+  const notesInput = document.getElementById("notes-input");
+  if (notesInput) {
+    notesInput.addEventListener("input", () => {
+      const t = batch?.[state.tIdx];
+      if (!t) return;
+      state.notesByTask[t.task_id] = notesInput.value;
+      saveState();
+    });
+  }
 });
 
 function setupQuizMapZoom() {
@@ -160,6 +180,11 @@ document.addEventListener("keydown", async e => {
       landmarks: {},      // map task_id -> array of strings
       textBoxesByTask: {},
       markersByTask: {},
+      notesByTask: {},
+      mapLockByTask: {},
+      mapOrientationDoneByTask: {},
+      mapUnlockedNotifiedByTask: {},
+      drawingActiveMsByTask: {},
     };
     alert("Local state cleared");
     return;
@@ -643,6 +668,21 @@ function renderTask(){
   console.log("Loading video for task:", t.task_id);
   renderObsVideo(t);
 
+  // Notes
+  const notesInput = document.getElementById("notes-input");
+  if (notesInput) {
+    notesInput.value = state.notesByTask[t.task_id] || "";
+  }
+
+  if (IS_DRAW) {
+    const taskId = t.task_id;
+    if (!state.mapOrientationDoneByTask[taskId]) {
+      startOrientationWindow(taskId);
+    } else {
+      syncMapLockUI(taskId);
+    }
+  }
+
   // Drawing pad (draw app only)
   if (IS_DRAW) {
     initCanvas(t);
@@ -850,6 +890,11 @@ window.addEventListener("DOMContentLoaded", () => {
 
   // ---------- OPEN / CLOSE MODAL ----------
   openMapBtn.addEventListener("click", () => {
+    const taskId = getCurrentTaskId();
+    if (taskId && isMapLocked(taskId)) {
+      showToast("Map is locked until you've drawn for at least a minute.");
+      return;
+    }
     mapModal.classList.add("visible");
     setZoom(false);          // reset when opening
     moved = false;
@@ -1256,11 +1301,63 @@ const drawLine = (pos) => {
   ctx.stroke();                       // draw line
 };
 
+const drawArrow = (pos) => {
+  const headLen = 10;
+  const dx = pos.x - prevMouseX;
+  const dy = pos.y - prevMouseY;
+  const angle = Math.atan2(dy, dx);
+
+  ctx.beginPath();
+  ctx.moveTo(prevMouseX, prevMouseY);
+  ctx.lineTo(pos.x, pos.y);
+  ctx.stroke();
+
+  ctx.beginPath();
+  ctx.moveTo(pos.x, pos.y);
+  ctx.lineTo(
+    pos.x - headLen * Math.cos(angle - Math.PI / 6),
+    pos.y - headLen * Math.sin(angle - Math.PI / 6)
+  );
+  ctx.lineTo(
+    pos.x - headLen * Math.cos(angle + Math.PI / 6),
+    pos.y - headLen * Math.sin(angle + Math.PI / 6)
+  );
+  ctx.lineTo(pos.x, pos.y);
+  ctx.fillStyle = selectedColor;
+  ctx.fill();
+};
+
 const drawCircle = (pos) => {
   ctx.beginPath();
   const radius = Math.sqrt(Math.pow((prevMouseX - pos.x), 2) + Math.pow((prevMouseY - pos.y), 2));
   ctx.arc(prevMouseX, prevMouseY, radius, 0, 2 * Math.PI);
   fillColor.checked ? ctx.fill() : ctx.stroke();
+};
+
+const drawCrosswalk = (pos) => {
+  const w = prevMouseX - pos.x;
+  const h = prevMouseY - pos.y;
+  const left = w < 0 ? prevMouseX : pos.x;
+  const top = h < 0 ? prevMouseY : pos.y;
+  const width = Math.abs(w);
+  const height = Math.abs(h);
+
+  ctx.strokeRect(left, top, width, height);
+
+  const stripes = Math.max(3, Math.floor(Math.min(width, height) / 6));
+  if (width >= height) {
+    const stripeH = height / (stripes * 2);
+    for (let i = 0; i < stripes; i++) {
+      const y = top + i * stripeH * 2;
+      ctx.fillRect(left, y, width, stripeH);
+    }
+  } else {
+    const stripeW = width / (stripes * 2);
+    for (let i = 0; i < stripes; i++) {
+      const x = left + i * stripeW * 2;
+      ctx.fillRect(x, top, stripeW, height);
+    }
+  }
 };
 
 const drawTriangle = (pos) => {
@@ -1285,6 +1382,7 @@ const startDraw = (e) => {
   }
   isDrawing = true;
   hasDrawn = true;
+  if (IS_DRAW) drawingSessionStartMs = performance.now();
   const pos = getMousePos(e);
   prevMouseX = pos.x;
   prevMouseY = pos.y;
@@ -1337,6 +1435,10 @@ const drawing = (e) => {
     drawTriangle(pos);
   } else if (selectedTool === "line") {
     drawLine(pos);
+  } else if (selectedTool === "arrow") {
+    drawArrow(pos);
+  } else if (selectedTool === "crosswalk") {
+    drawCrosswalk(pos);
   }
 };
 
@@ -1677,6 +1779,19 @@ function exportPngWithText() {
     // multi-line support
     const lines = (textEl.innerText || "").split("\n");
     const lineH = (fontSize * scaleY) * 1.2;
+    const pad = 2 * scaleX;
+
+    const bgColor = (style.backgroundColor && style.backgroundColor !== "rgba(0, 0, 0, 0)")
+      ? style.backgroundColor
+      : "#fff";
+    const maxLineWidth = lines.reduce((maxW, line) => {
+      const w = octx.measureText(line).width;
+      return Math.max(maxW, w);
+    }, 0);
+    octx.fillStyle = bgColor;
+    octx.fillRect(x - pad, y - pad, maxLineWidth + pad * 2, lineH * lines.length + pad * 2);
+    octx.fillStyle = style.color || "#000";
+
     lines.forEach((line, i) => octx.fillText(line, x, y + i * lineH));
   });
 
@@ -1705,6 +1820,10 @@ const endDraw = (e) => {
   if (t && t.task_id) recordStrokeEnd(t.task_id);
   if (t && t.task_id) {
     commitDrawingSnapshotToState(t.task_id);
+    if (IS_DRAW && drawingSessionStartMs != null) {
+      recordDrawingActiveMs(t.task_id, performance.now() - drawingSessionStartMs);
+      drawingSessionStartMs = null;
+    }
   }
 };
 
@@ -1918,6 +2037,7 @@ function initCanvas(t) {
 
 const MAX_ENTROPY_POINTS = 2000; // cap to avoid bloating localStorage
 let currentStrokePoints = [];    // temp buffer while dragging
+let drawingSessionStartMs = null;
 
 function recordStrokeStart(taskId) {
   const m = getTaskMetrics(taskId);
@@ -2090,9 +2210,9 @@ function checkEffortRequirements(taskId) {
   const MIN_WATCH_FRAC = 0.50;
 
   if (IS_DRAW) {
-    const N_STROKES = 10;
-    const K_SECONDS = 10;      // between first and last stroke
-    const MIN_ENTROPY = 0.25;
+  const N_STROKES = 5;
+  const K_SECONDS = 10;      // between first and last stroke
+  const MIN_ENTROPY = 0.15;
 
     const strokeCount = m.drawing?.strokeCount || 0;
     if (strokeCount < N_STROKES) {
@@ -2109,6 +2229,11 @@ function checkEffortRequirements(taskId) {
     if (entropy < MIN_ENTROPY) {
       return { ok: false, reason: `Please draw the route and landmarks more fully across the canvas (not just in one small area).` };
     }
+  }
+
+  const textCount = document.querySelectorAll(".text-box").length;
+  if (textCount < 1) {
+    return { ok: false, reason: "Please add at least one text label." };
   }
 
   // --- video checks ---
@@ -2128,6 +2253,142 @@ function checkEffortRequirements(taskId) {
   }
 
   return { ok: true, reason: "ok" };
+}
+
+function showOverlayMessage(text, durationMs) {
+  const overlay = document.getElementById("page-overlay");
+  const overlayText = document.getElementById("page-overlay-text");
+  if (!overlay || !overlayText) return;
+
+  overlayText.textContent = text;
+  overlay.style.display = "flex";
+
+  if (durationMs) {
+    setTimeout(() => {
+      overlay.style.display = "none";
+    }, durationMs);
+  }
+}
+
+function showToast(message, durationMs = 2500) {
+  const toast = document.getElementById("toast");
+  if (!toast) return;
+  toast.textContent = message;
+  toast.style.display = "block";
+  setTimeout(() => {
+    toast.style.display = "none";
+  }, durationMs);
+}
+
+function isMapLocked(taskId) {
+  return !!state.mapLockByTask[taskId];
+}
+
+function syncMapLockUI(taskId) {
+  const openMapBtn = document.getElementById("open-map-btn");
+  if (!openMapBtn) return;
+  const locked = isMapLocked(taskId);
+  openMapBtn.disabled = locked;
+  openMapBtn.textContent = locked ? "Satellite Map (Locked)" : "See Satellite Map";
+  saveState();
+}
+
+function setMapLocked(taskId, locked) {
+  state.mapLockByTask[taskId] = locked;
+  syncMapLockUI(taskId);
+
+  const mapModal = document.getElementById("map-modal");
+  if (locked && mapModal) {
+    mapModal.classList.remove("visible");
+    mapModal.classList.remove("zoomed");
+  }
+}
+
+function startOrientationWindow(taskId) {
+  const mapModal = document.getElementById("map-modal");
+  const openMapBtn = document.getElementById("open-map-btn");
+  if (!mapModal || !openMapBtn) return;
+
+  setMapLocked(taskId, false);
+
+  let secondsLeft = 10;
+  showOverlayMessage(`10 seconds to orient yourself. The map will lock until you've drawn for at least a minute.`, null);
+  mapModal.classList.add("visible");
+
+  const tick = () => {
+    secondsLeft -= 1;
+    if (secondsLeft > 0) {
+      showOverlayMessage(`You have ${secondsLeft} seconds to orient yourself.`, null);
+    } else {
+      clearInterval(timer);
+      mapModal.classList.remove("visible");
+      setMapLocked(taskId, true);
+      state.mapOrientationDoneByTask[taskId] = true;
+      saveState();
+      showOverlayMessage("Watch the video, then draw your sketch from what you saw.", 3000);
+    }
+  };
+
+  const timer = setInterval(tick, 1000);
+}
+
+function recordDrawingActiveMs(taskId, deltaMs) {
+  if (!taskId) return;
+  const cur = state.drawingActiveMsByTask[taskId] || 0;
+  const next = cur + deltaMs;
+  state.drawingActiveMsByTask[taskId] = next;
+  saveState();
+
+  if (next >= 45000 && isMapLocked(taskId)) {
+    setMapLocked(taskId, false);
+    if (!state.mapUnlockedNotifiedByTask[taskId]) {
+      state.mapUnlockedNotifiedByTask[taskId] = true;
+      saveState();
+      showToast("Map unlocked. You can reference it for extra details.");
+    }
+  }
+}
+
+function requestChecklistConfirmation() {
+  if (!IS_DRAW) return Promise.resolve(true);
+
+  const modal = document.getElementById("save-checklist-modal");
+  const checkMarkers = document.getElementById("check-markers");
+  const checkBetween = document.getElementById("check-between");
+  const confirmBtn = document.getElementById("checklist-confirm");
+  const cancelBtn = document.getElementById("checklist-cancel");
+
+  if (!modal || !checkMarkers || !checkBetween || !confirmBtn || !cancelBtn) {
+    return Promise.resolve(true);
+  }
+
+  const update = () => {
+    confirmBtn.disabled = !(checkMarkers.checked && checkBetween.checked);
+  };
+
+  const reset = () => {
+    checkMarkers.checked = false;
+    checkBetween.checked = false;
+    confirmBtn.disabled = true;
+  };
+
+  modal.style.display = "flex";
+  update();
+
+  return new Promise(resolve => {
+    const cleanup = (value) => {
+      modal.style.display = "none";
+      checkMarkers.removeEventListener("change", update);
+      checkBetween.removeEventListener("change", update);
+      reset();
+      resolve(value);
+    };
+
+    checkMarkers.addEventListener("change", update);
+    checkBetween.addEventListener("change", update);
+    confirmBtn.addEventListener("click", () => cleanup(true), { once: true });
+    cancelBtn.addEventListener("click", () => cleanup(false), { once: true });
+  });
 }
 
 function validateMarkersPresentOnce() {
@@ -2377,6 +2638,9 @@ if (saveBtn) {
 
       await saveCurrentTaskToBackend();
     } else {
+      const checklistOk = await requestChecklistConfirmation();
+      if (!checklistOk) return;
+
       if (isCanvasBlank(canvas)) {
         alert("You cannot save an empty board!");
         return;
@@ -2424,7 +2688,7 @@ if (submitAllBtn) {
       const t = batch[state.tIdx];
       if (!t) return;
 
-      if (IS_LANDMARK) {
+    if (IS_LANDMARK) {
         const lms = getCurrentTaskLandmarks(t);
         if (lms.length === 0) {
           alert("No landmarks entered.");
@@ -2439,10 +2703,13 @@ if (submitAllBtn) {
 
         finalizeLandmarkMetrics(t.task_id);
         await saveCurrentTaskToBackend();
-      } else {
-        if (isCanvasBlank(canvas)) {
-          alert("You cannot submit an empty board!");
-          return;
+    } else {
+      const checklistOk = await requestChecklistConfirmation();
+      if (!checklistOk) return;
+
+      if (isCanvasBlank(canvas)) {
+        alert("You cannot submit an empty board!");
+        return;
         }
 
         finalizeVideoMetricsNow(t.task_id);

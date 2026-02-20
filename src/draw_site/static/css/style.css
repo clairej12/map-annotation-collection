@@ -187,6 +187,33 @@ body {
     overflow: hidden;
 }
 
+.notes-panel {
+  margin: 0.75rem 0 1rem;
+}
+
+.notes-panel textarea {
+  width: 100%;
+  max-width: 800px;
+  padding: 0.5rem;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  font-size: 0.95rem;
+  line-height: 1.3;
+  resize: vertical;
+}
+
+.video-reminder {
+  margin: 0.25rem 0 0.5rem;
+  font-size: 0.95rem;
+  color: #333;
+}
+
+.text-box .text-content {
+  background: #fff;
+  padding: 2px 4px;
+  border-radius: 2px;
+}
+
 /* Modal overlay */
 #map-modal {
   display: none;
@@ -231,6 +258,77 @@ body {
 
 #map-modal.zoomed #map-img:active {
   cursor: grabbing;
+}
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1200;
+}
+
+.modal-card {
+  background: #fff;
+  padding: 1rem 1.25rem;
+  max-width: 480px;
+  width: 92%;
+  border-radius: 8px;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.2);
+}
+
+.check-item {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  margin: 0.5rem 0;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.page-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.65);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1300;
+  text-align: center;
+  padding: 1rem;
+}
+
+.page-overlay-text {
+  color: #fff;
+  font-size: 1.6rem;
+  font-weight: 600;
+  max-width: 720px;
+  line-height: 1.3;
+}
+
+.toast {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  background: #111;
+  color: #fff;
+  padding: 0.6rem 0.85rem;
+  border-radius: 6px;
+  font-size: 0.95rem;
+  z-index: 1400;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
+}
+
+#open-map-btn[disabled] {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .drawing-container {
