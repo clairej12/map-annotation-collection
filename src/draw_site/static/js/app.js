@@ -892,7 +892,7 @@ window.addEventListener("DOMContentLoaded", () => {
   openMapBtn.addEventListener("click", () => {
     const taskId = getCurrentTaskId();
     if (taskId && isMapLocked(taskId)) {
-      showToast("Map is locked until you've drawn for at least a minute.");
+      showToast("Map is locked until you've drawn for at least 20 seconds.");
       return;
     }
     mapModal.classList.add("visible");
@@ -2324,13 +2324,13 @@ function startOrientationWindow(taskId) {
   setMapLocked(taskId, false);
 
   let secondsLeft = 10;
-  showOverlayMessage(`10 seconds to orient yourself. The map will lock until you've drawn for at least a minute.`, null);
+  showOverlayMessage(`10 seconds to orient yourself. The map will lock, then unlock after 20 seconds of drawing.`, null);
   mapModal.classList.add("visible");
 
   const tick = () => {
     secondsLeft -= 1;
     if (secondsLeft > 0) {
-      showOverlayMessage(`You have ${secondsLeft} seconds to orient yourself.`, null);
+      showOverlayMessage(`${secondsLeft} seconds to orient yourself. The map will lock, then unlock after 20 seconds of drawing.`, null);
     } else {
       clearInterval(timer);
       mapModal.classList.remove("visible");
