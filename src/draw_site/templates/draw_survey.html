@@ -11,16 +11,16 @@
   <!-- DRAWING-SPECIFIC INSTRUCTIONS -->
   <template id="instructions-template">
     <h2>Draw the route from the video</h2>
-    <p>Use the video as your main source. The map is a reference, not a template.</p>
-    <p>Your sketch does not need to match the satellite map perfectly.</p>
-    <p>It should help someone navigate the route.</p>
+    <p>You will see a car dash-cam video. Use this video as your main source to draw a sketch map of the route in the video.</p>
+    <p>There will be a GPS map too as a reference for orienting yourself, not a template. This map will be shown to you initially, locked, and then unlock after you have drawn your sketch map.</p>
+    <p>Your sketch does not need to and should not match the GPS map perfectly. It should just help someone navigate the route and identify locations A, B, and C flagged during the video.</p>
 
     <h3>Include</h3>
-    <p>Start (S), A, B, C, and Goal (G) in the order seen.</p>
-    <p>Turns, crossings, and at least a few landmarks or road features.</p>
+    <p>Start (S), A, B, C, and Goal (G) markers in the order seen.</p>
+    <p>Turns, crossings, and at least a few landmarks or road features that separate/differentiate these markers.</p>
 
     <h3>Do not</h3>
-    <p>Copy the satellite map directly. Draw what you saw in the video.</p>
+    <p>Copy the GPS map directly. Draw based on the turns and buildings you saw in the video. Once you have drawn enough, the GPS map will unlock to assist you in adding more detail.</p>
   </template>
 
   <!-- Instructions Page -->
@@ -31,6 +31,7 @@
     <h2>Example Flow</h2>
     <div id="example-container" class="example">
       <div class="example-observations" style="margin-top:1rem;">
+        <h3>0. Look at the map pop up (10 sec countdown) to orient yourself for the video</h3>
         <h3>1. Watch the video</h3>
         <video id="example-obs-video" width="100%" controls preload="metadata">
           <source src="{{ url_for('serve_video', filename='rid_72.mp4') }}" type="video/mp4">
