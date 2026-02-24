@@ -2000,7 +2000,6 @@ if (canvas && ctx) {
 
       const oldRect = canvas.getBoundingClientRect();
       if (taskId) saveTextBoxesForTask(taskId);
-      if (taskId) saveMarkersForTask(taskId);
 
       const dataUrl = canvas.toDataURL("image/png");
 
