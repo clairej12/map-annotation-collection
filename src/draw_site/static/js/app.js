@@ -1980,27 +1980,32 @@ if (canvas && ctx) {
 
         setCanvasBackground();
         const { w, h } = getCanvasCssSize();
-        ctx.drawImage(img, 0, 0, w, h);
-
         const newRect = canvas.getBoundingClientRect();
         const sx = oldRect.width  ? (newRect.width  / oldRect.width)  : 1;
         const sy = oldRect.height ? (newRect.height / oldRect.height) : 1;
+        const s = Math.min(sx, sy);
+        const drawW = oldRect.width * s;
+        const drawH = oldRect.height * s;
+        const offsetX = (newRect.width - drawW) / 2;
+        const offsetY = (newRect.height - drawH) / 2;
+
+        ctx.drawImage(img, offsetX, offsetY, drawW, drawH);
 
         if (!taskId) return;
         const saved = ensureTextBoxStore(taskId);
         saved.forEach(tb => {
-          tb.left *= sx;
-          tb.top  *= sy;
+          tb.left = tb.left * s + offsetX;
+          tb.top  = tb.top  * s + offsetY;
         });
         saveState();
 
         restoreTextBoxesForTask(taskId);
         const savedMarkers = ensureMarkerStore(taskId);
         savedMarkers.forEach(m => {
-          m.left *= sx;
-          m.top  *= sy;
-          m.width *= sx;
-          m.height *= sy;
+          m.left = m.left * s + offsetX;
+          m.top  = m.top  * s + offsetY;
+          m.width *= s;
+          m.height *= s;
         });
         saveState();
         restoreMarkersForTask(taskId);
