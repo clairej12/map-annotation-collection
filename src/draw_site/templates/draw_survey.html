@@ -18,6 +18,7 @@
     <h3>Include</h3>
     <p>Start (S), A, B, C, and Goal (G) markers in the order seen.</p>
     <p>Turns, crossings, and at least a few landmarks or road features that separate/differentiate these markers.</p>
+    <p>Label every landmark (e.g., "building", "park", "gate").</p>
 
     <h3>Do not</h3>
     <p>Copy the GPS map directly. Draw based on the turns and buildings you saw in the video. Once you have drawn enough, the GPS map will unlock to assist you in adding more detail.</p>
@@ -217,7 +218,7 @@
   <div id="save-checklist-modal" class="modal-overlay" style="display:none;">
     <div class="modal-card">
       <h2>Before you continue</h2>
-      <p>Please confirm both items:</p>
+      <p>Please confirm all items:</p>
       <label class="check-item">
         <input type="checkbox" id="check-markers">
         I placed S, A, B, C, and G using the markers.
@@ -225,6 +226,10 @@
       <label class="check-item">
         <input type="checkbox" id="check-between">
         There is at least one landmark or road feature between each pair of markers.
+      </label>
+      <label class="check-item">
+        <input type="checkbox" id="check-labels">
+        I labeled all landmarks (e.g., "building", "park", "gate").
       </label>
       <div class="modal-actions">
         <button type="button" id="checklist-cancel">Go Back</button>

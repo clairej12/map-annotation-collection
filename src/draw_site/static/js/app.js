@@ -2367,20 +2367,22 @@ function requestChecklistConfirmation() {
   const modal = document.getElementById("save-checklist-modal");
   const checkMarkers = document.getElementById("check-markers");
   const checkBetween = document.getElementById("check-between");
+  const checkLabels = document.getElementById("check-labels");
   const confirmBtn = document.getElementById("checklist-confirm");
   const cancelBtn = document.getElementById("checklist-cancel");
 
-  if (!modal || !checkMarkers || !checkBetween || !confirmBtn || !cancelBtn) {
+  if (!modal || !checkMarkers || !checkBetween || !checkLabels || !confirmBtn || !cancelBtn) {
     return Promise.resolve(true);
   }
 
   const update = () => {
-    confirmBtn.disabled = !(checkMarkers.checked && checkBetween.checked);
+    confirmBtn.disabled = !(checkMarkers.checked && checkBetween.checked && checkLabels.checked);
   };
 
   const reset = () => {
     checkMarkers.checked = false;
     checkBetween.checked = false;
+    checkLabels.checked = false;
     confirmBtn.disabled = true;
   };
 
@@ -2398,6 +2400,7 @@ function requestChecklistConfirmation() {
 
     checkMarkers.addEventListener("change", update);
     checkBetween.addEventListener("change", update);
+    checkLabels.addEventListener("change", update);
     confirmBtn.addEventListener("click", () => cleanup(true), { once: true });
     cancelBtn.addEventListener("click", () => cleanup(false), { once: true });
   });
