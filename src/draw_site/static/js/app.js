@@ -1501,12 +1501,19 @@ function saveMarkersForTask(taskId) {
     const left = boxRect.left - canvasRect.left;
     const top = boxRect.top - canvasRect.top;
 
+    const canvasW = canvasRect.width || 1;
+    const canvasH = canvasRect.height || 1;
+
     return {
       id,
       left,
       top,
       width: boxRect.width,
       height: boxRect.height,
+      leftPct: left / canvasW,
+      topPct: top / canvasH,
+      widthPct: boxRect.width / canvasW,
+      heightPct: boxRect.height / canvasH,
       src: marker.dataset.src || "",
     };
   });
@@ -1541,10 +1548,33 @@ function restoreMarkersForTask(taskId) {
 
   const saved = state.markersByTask?.[taskId] || [];
   saved.forEach(m => {
-    createMarkerStamp(m.left, m.top, m.src, {
+    const canvasRect = canvas.getBoundingClientRect();
+    const canvasW = canvasRect.width || 1;
+    const canvasH = canvasRect.height || 1;
+
+    let left = m.left;
+    let top = m.top;
+    let width = m.width;
+    let height = m.height;
+
+    if (typeof m.leftPct === "number" && typeof m.topPct === "number") {
+      left = m.leftPct * canvasW;
+      top = m.topPct * canvasH;
+      width = (typeof m.widthPct === "number" ? m.widthPct * canvasW : width);
+      height = (typeof m.heightPct === "number" ? m.heightPct * canvasH : height);
+    } else {
+      // backfill normalized values for older saves
+      m.leftPct = left / canvasW;
+      m.topPct = top / canvasH;
+      m.widthPct = width / canvasW;
+      m.heightPct = height / canvasH;
+      saveState();
+    }
+
+    createMarkerStamp(left, top, m.src, {
       id: m.id,
-      width: m.width,
-      height: m.height,
+      width: width,
+      height: height,
       focus: false,
     });
   });
@@ -2000,14 +2030,6 @@ if (canvas && ctx) {
         saveState();
 
         restoreTextBoxesForTask(taskId);
-        const savedMarkers = ensureMarkerStore(taskId);
-        savedMarkers.forEach(m => {
-          m.left = m.left * s + offsetX;
-          m.top  = m.top  * s + offsetY;
-          m.width *= s;
-          m.height *= s;
-        });
-        saveState();
         restoreMarkersForTask(taskId);
 
         if (taskId) commitDrawingSnapshotToState(taskId);
