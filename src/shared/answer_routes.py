@@ -165,6 +165,11 @@ def register_answer_routes(app):
                 except json.JSONDecodeError:
                     data = []
 
+        routes_data = app.extensions.get("routes_data") or {}
+        route_info = routes_data.get(task.route_id) or {}
+        map_url = route_info.get("map")
+        video = f"{task.route_id}.mp4"
+
         entry_data = next((d for d in data if d.get("task_id") == task_id), None)
         if not entry_data:
             entry_data = {
@@ -175,11 +180,15 @@ def register_answer_routes(app):
                 "task_metrics": incoming_task_metrics,
                 "timestamp": ts.isoformat(),
                 "prolific": current_user.hit_id,
+                "map_url": map_url,
+                "video": video,
             }
             data.append(entry_data)
         else:
             entry_data["landmarks"] = landmarks
             entry_data["mode"] = mode
+            entry_data["map_url"] = map_url
+            entry_data["video"] = video
             prev_file_metrics = entry_data.get("task_metrics") if isinstance(entry_data.get("task_metrics"), dict) else {}
             entry_data["task_metrics"] = _merge_metrics(prev_file_metrics, incoming_task_metrics)
             entry_data["timestamp"] = ts.isoformat()
