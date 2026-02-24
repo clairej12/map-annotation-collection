@@ -99,7 +99,7 @@ def register_shared_routes(app):
         current_user.inflight_batch = False
         db.session.commit()
         if app.config.get("APP_MODE") == "draw":
-            completion_url = "https://app.prolific.com/submissions/complete?cc=C521RWFI"
+            completion_url = "https://app.prolific.com/submissions/complete?cc=C1N2OWCF"
         else:
             completion_url = "https://app.prolific.com/submissions/complete?cc=C170KQM0"
         return jsonify({"status": "ok", "completion_url": completion_url})
