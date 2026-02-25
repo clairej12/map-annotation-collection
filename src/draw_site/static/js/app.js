@@ -2254,24 +2254,24 @@ function checkEffortRequirements(taskId) {
 
     const strokeCount = m.drawing?.strokeCount || 0;
     if (strokeCount < N_STROKES) {
-      return { ok: false, reason: `Please draw a bit more detail on your map.` };
+      return { ok: false, reason: "Please add more drawn detail. Make sure each marker has a drawn feature between it and the next marker." };
     }
 
     const first = m.drawing?.firstStrokeMs;
     const last  = m.drawing?.lastStrokeMs;
     if (first == null || last == null || (last - first) < K_SECONDS * 1000) {
-      return { ok: false, reason: `Please spend some more time drawing before proceeding.` };
+      return { ok: false, reason: "Please spend a bit more time drawing. Add landmarks and label them (e.g., building, park, gate)." };
     }
 
     const entropy = computeStrokeEntropy01(taskId, 8);
     if (entropy < MIN_ENTROPY) {
-      return { ok: false, reason: `Please draw the route and landmarks more fully across the canvas (not just in one small area).` };
+      return { ok: false, reason: "Please spread your drawing across more of the canvas. Include turns and landmarks between each pair of markers." };
     }
   }
 
   const textCount = document.querySelectorAll(".text-box").length;
   if (textCount < 1) {
-    return { ok: false, reason: "Please add at least one text label." };
+    return { ok: false, reason: "Please label your landmarks (e.g., building, park, gate)." };
   }
 
   // --- video checks ---
@@ -2283,10 +2283,10 @@ function checkEffortRequirements(taskId) {
     const watchMs = m.video?.totalWatchTimeMs || 0;
 
     if (reached < MIN_REACHED_FRAC * dur) {
-      return { ok: false, reason: `Please watch more of the video before proceeding.` };
+      return { ok: false, reason: "Please watch more of the video so you can add turns and landmarks." };
     }
     if (watchMs < MIN_WATCH_FRAC * dur * 1000) {
-      return { ok: false, reason: `Please spend a bit more time watching the video before proceeding.` };
+      return { ok: false, reason: "Please spend a bit more time watching the video before proceeding." };
     }
   }
 
