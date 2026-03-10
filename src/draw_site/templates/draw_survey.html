@@ -91,20 +91,26 @@
 
   <!-- DRAW TASK PAGE -->
   <div id="task-page" class="page">
-    <div id="user-info" style="margin-bottom: 1em; font-weight: bold;">
-      User ID: {{ user_id }}, Study ID: {{ study_id }}
+    <div class="task-header">
+      <div id="user-info" class="user-info">
+        User ID: {{ user_id }}, Study ID: {{ study_id }}
+      </div>
+      <button id="show-instructions-btn" class="secondary-btn">Show Instructions</button>
     </div>
 
-    <div id="route-indicator" style="font-weight: bold; margin-bottom: 0.5rem;">
+    <div id="route-indicator" class="route-indicator">
       Route 1 of 6
     </div>
+    <div class="route-progress" aria-hidden="true">
+      <div id="route-progress-fill" class="route-progress-fill"></div>
+    </div>
+    <div id="save-status" class="save-status" aria-live="polite">Unsaved changes</div>
 
     <div id="page-overlay" class="page-overlay" style="display:none;">
       <div id="page-overlay-text" class="page-overlay-text"></div>
     </div>
     <div id="toast" class="toast" style="display:none;"></div>
 
-    <button id="show-instructions-btn" style="margin-left:auto;">Show Instructions</button>
     <div id="instructions-modal" style="display:none;">
       <div id="modal-instr-content"></div>
     </div>
@@ -140,13 +146,13 @@
           <h1 class="title">TOOLS</h1>
           <label class="title">Shapes</label>
           <ul class="options">
-            <li class="option tool" id="rectangle"><img src="{{ url_for('static', filename='icons/rectangle.svg') }}"><span>Rectangle</span></li>
-            <li class="option tool" id="circle"><img src="{{ url_for('static', filename='icons/circle.svg') }}"><span>Circle</span></li>
-            <li class="option tool" id="triangle"><img src="{{ url_for('static', filename='icons/triangle.svg') }}"><span>Triangle</span></li>
-            <li class="option tool" id="line"><img src="{{ url_for('static', filename='icons/line.svg') }}"><span>Line</span></li>
-            <li class="option tool" id="arrow"><img src="{{ url_for('static', filename='icons/arrow.svg') }}"><span>Arrow</span></li>
-            <li class="option tool" id="crosswalk"><img src="{{ url_for('static', filename='icons/crosswalk.svg') }}"><span>Crosswalk</span></li>
-            <li class="option tool" id="text"><span>Add Text Box</span></li>
+            <li class="option tool" id="rectangle" title="Rectangle tool"><img src="{{ url_for('static', filename='icons/rectangle.svg') }}"><span>Rectangle</span></li>
+            <li class="option tool" id="circle" title="Circle tool"><img src="{{ url_for('static', filename='icons/circle.svg') }}"><span>Circle</span></li>
+            <li class="option tool" id="triangle" title="Triangle tool"><img src="{{ url_for('static', filename='icons/triangle.svg') }}"><span>Triangle</span></li>
+            <li class="option tool" id="line" title="Line tool"><img src="{{ url_for('static', filename='icons/line.svg') }}"><span>Line</span></li>
+            <li class="option tool" id="arrow" title="Arrow tool"><img src="{{ url_for('static', filename='icons/arrow.svg') }}"><span>Arrow</span></li>
+            <li class="option tool" id="crosswalk" title="Crosswalk tool"><img src="{{ url_for('static', filename='icons/crosswalk.svg') }}"><span>Crosswalk</span></li>
+            <li class="option tool" id="text" title="Text tool"><span>Add Text Box</span></li>
             <li class="option"><input type="checkbox" id="fill-color"><label for="fill-color">Fill shape</label></li>
           </ul>
         </div>
@@ -154,8 +160,8 @@
         <div class="row">
           <label class="title">Options</label>
           <ul class="options">
-            <li class="option active tool" id="brush"><img src="{{ url_for('static', filename='icons/brush.svg') }}"><span>Brush</span></li>
-            <li class="option tool" id="eraser"><img src="{{ url_for('static', filename='icons/eraser.svg') }}"><span>Eraser</span></li>
+            <li class="option active tool" id="brush" title="Brush tool (B)"><img src="{{ url_for('static', filename='icons/brush.svg') }}"><span>Brush</span></li>
+            <li class="option tool" id="eraser" title="Eraser tool (E)"><img src="{{ url_for('static', filename='icons/eraser.svg') }}"><span>Eraser</span></li>
             <li class="option"><input type="range" id="size-slider" min="1" max="30" value="5"></li>
           </ul>
         </div>
@@ -201,16 +207,16 @@
 
       <section class="drawing-board">
         <div class="drawing-note">
-          Use the text box to type, the pen to draw free-form lines, the size slider to change pen/eraser size, and the shapes/line tools to draw those specific shapes. You can also use different colors. To use a marker button (S/A/B/C/G), click on the button then click the canvas to place it. 
+          Draw from memory first, then use the GPS map for extra detail after it unlocks. Shortcuts: <strong>B</strong> brush, <strong>E</strong> eraser, <strong>T</strong> text, <strong>M</strong> marker, <strong>Ctrl/Cmd+Z</strong> undo, <strong>Ctrl/Cmd+Shift+Z</strong> redo.
         </div>
         <canvas id="canvas"></canvas>
       </section>
     </div>
 
     <!-- NEW: finish-route controls -->
-    <div style="margin-top: 1rem; display:flex; gap: 0.5rem;">
-      <button type="button" id="save-btn">Save & Next</button>
-      <button type="button" id="submit-all-btn" style="display:none;">Submit All</button>
+    <div class="task-actions">
+      <button type="button" id="save-btn" class="primary-btn">Save & Next</button>
+      <button type="button" id="submit-all-btn" class="primary-btn" style="display:none;">Submit All</button>
     </div>
   </div>
 
@@ -219,6 +225,9 @@
     <div class="modal-card">
       <h2>Before you continue</h2>
       <p>Please confirm all items:</p>
+      <p class="payment-warning">
+        Quality gate: if your map is missing required markers/features/labels, it may be rejected and not paid.
+      </p>
       <label class="check-item">
         <input type="checkbox" id="check-markers">
         I placed S, A, B, C, and G using the markers.
@@ -230,6 +239,10 @@
       <label class="check-item">
         <input type="checkbox" id="check-labels">
         I labeled all landmarks (e.g., "building", "park", "gate").
+      </label>
+      <label class="check-item">
+        <input type="checkbox" id="check-payment">
+        I understand maps that miss these requirements may be rejected and unpaid.
       </label>
       <div class="modal-actions">
         <button type="button" id="checklist-cancel">Go Back</button>

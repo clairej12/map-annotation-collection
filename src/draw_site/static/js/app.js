@@ -15,6 +15,7 @@ const PROLIFIC_SCREENOUT_URL = "https://app.prolific.com/submissions/complete?cc
 let batch = [], savedAns = {};
 let taskMetrics = {};
 let autoSaveTimer = null;
+let saveStatusResetTimer = null;
 
 let state = {
   currentPage: "instr-page",
@@ -49,6 +50,44 @@ let state = {
   mapUnlockedNotifiedByTask: {},
   drawingActiveMsByTask: {},
 };
+
+function setSaveStatus(kind, message = "") {
+  const el = document.getElementById("save-status");
+  if (!el) return;
+
+  el.classList.remove("status-saving", "status-saved", "status-error", "status-ready");
+
+  if (kind === "saving") {
+    el.classList.add("status-saving");
+    el.textContent = message || "Saving...";
+    return;
+  }
+  if (kind === "saved") {
+    el.classList.add("status-saved");
+    el.textContent = message || "All changes saved";
+    if (saveStatusResetTimer) clearTimeout(saveStatusResetTimer);
+    saveStatusResetTimer = setTimeout(() => {
+      setSaveStatus("ready", "Ready");
+    }, 2500);
+    return;
+  }
+  if (kind === "error") {
+    el.classList.add("status-error");
+    el.textContent = message || "Save failed. Retrying...";
+    return;
+  }
+  if (kind === "ready") {
+    el.classList.add("status-ready");
+    el.textContent = message || "Ready";
+    return;
+  }
+
+  el.textContent = message || "Unsaved changes";
+}
+
+function markUnsaved() {
+  setSaveStatus("unsaved", "Unsaved changes");
+}
 
 // Restore from localStorage
 function normalizeState() {
@@ -140,6 +179,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       const t = batch?.[state.tIdx];
       if (!t) return;
       state.notesByTask[t.task_id] = notesInput.value;
+      markUnsaved();
       saveState();
     });
   }
@@ -200,6 +240,51 @@ document.addEventListener("keydown", async e => {
     e.preventDefault();
     await devSkipQuiz();
   }
+});
+
+function isTypingInField(target) {
+  if (!target) return false;
+  return !!target.closest("input, textarea, [contenteditable='true']");
+}
+
+document.addEventListener("keydown", (e) => {
+  const task = batch?.[state.tIdx];
+  const taskId = task?.task_id;
+  const inField = isTypingInField(e.target);
+  const hasCtrl = e.ctrlKey || e.metaKey;
+
+  if (e.key === "Escape") {
+    const mapModal = document.getElementById("map-modal");
+    const instructionsDiv = document.getElementById("instructions-modal");
+    if (mapModal?.classList.contains("visible")) {
+      mapModal.classList.remove("visible");
+      mapModal.classList.remove("zoomed");
+    }
+    if (instructionsDiv && instructionsDiv.style.display === "block") {
+      instructionsDiv.style.display = "none";
+      const toggleBtn = document.getElementById("show-instructions-btn");
+      if (toggleBtn) toggleBtn.textContent = "Show Instructions";
+    }
+  }
+
+  if (!taskId || inField) return;
+
+  if (hasCtrl && e.key.toLowerCase() === "z" && !e.shiftKey) {
+    e.preventDefault();
+    doUndo(taskId);
+    return;
+  }
+  if (hasCtrl && (e.key.toLowerCase() === "y" || (e.key.toLowerCase() === "z" && e.shiftKey))) {
+    e.preventDefault();
+    doRedo(taskId);
+    return;
+  }
+
+  const k = e.key.toLowerCase();
+  if (k === "b") document.getElementById("brush")?.click();
+  if (k === "e") document.getElementById("eraser")?.click();
+  if (k === "t") document.getElementById("text")?.click();
+  if (k === "m") document.querySelector(".marker-btn")?.click();
 });
 
 // ------------------ Save State ------------------
@@ -529,9 +614,19 @@ async function devSkipQuiz() {
 }
 
 document.getElementById("begin-btn").onclick = async () => {
+  const beginBtn = document.getElementById("begin-btn");
+  if (beginBtn) {
+    beginBtn.disabled = true;
+    beginBtn.textContent = "Loading...";
+  }
+
   // If quiz is enabled and not passed, go to quiz
   if (!state.quiz?.passed) {
     show("quiz-page");
+    if (beginBtn) {
+      beginBtn.disabled = false;
+      beginBtn.textContent = "Begin";
+    }
     return;
   }
 
@@ -544,6 +639,11 @@ document.getElementById("begin-btn").onclick = async () => {
   } catch (err) {
     console.error("Could not begin tasks:", err);
     alert("Sorry, could not load the tasks. Please try again.");
+  } finally {
+    if (beginBtn) {
+      beginBtn.disabled = false;
+      beginBtn.textContent = "Begin";
+    }
   }
 };
 
@@ -702,12 +802,20 @@ function renderTask(){
 
   // Buttons
   updateSaveButtons();
+  updateRouteIndicator();
+  setSaveStatus("ready", "Ready");
 }
 
 function updateRouteIndicator() {
   const el = document.getElementById("route-indicator");
   if (!el || !batch || batch.length === 0) return;
   el.textContent = `Route ${state.tIdx + 1} of ${batch.length}`;
+
+  const fill = document.getElementById("route-progress-fill");
+  if (fill) {
+    const progress = ((state.tIdx + 1) / batch.length) * 100;
+    fill.style.width = `${progress}%`;
+  }
 }
 
 // ------------------ Render Observations ------------------
@@ -1376,6 +1484,7 @@ const startDraw = (e) => {
     if (!selectedMarker) return;
     const pos = getMousePos(e);
     createMarkerStamp(pos.x, pos.y, selectedMarker);
+    markUnsaved();
     const t = batch[state.tIdx];
     if (t && t.task_id) saveMarkersForTask(t.task_id);
     return;
@@ -1612,6 +1721,7 @@ function createTextBox(x, y, opts = {}) {
   closeBtn.textContent = "✕";
   closeBtn.onclick = () => {
     textBox.remove();
+    markUnsaved();
     if (taskId) saveTextBoxesForTask(taskId);
   };
 
@@ -1623,6 +1733,7 @@ function createTextBox(x, y, opts = {}) {
   let typingTimer = null;
   textContent.addEventListener("input", () => {
     clearTimeout(typingTimer);
+    markUnsaved();
     typingTimer = setTimeout(() => {
       if (taskId) saveTextBoxesForTask(taskId);
     }, 250);
@@ -1641,6 +1752,7 @@ function createTextBox(x, y, opts = {}) {
   });
 
   makeDraggable(textBox, () => {
+    markUnsaved();
     if (taskId) saveTextBoxesForTask(taskId);
   });
 
@@ -1678,6 +1790,7 @@ function createMarkerStamp(x, y, src, opts = {}) {
   closeBtn.textContent = "✕";
   closeBtn.onclick = () => {
     marker.remove();
+    markUnsaved();
     if (taskId) saveMarkersForTask(taskId);
   };
 
@@ -1689,9 +1802,11 @@ function createMarkerStamp(x, y, src, opts = {}) {
   drawingBoard.appendChild(marker);
 
   makeDraggable(marker, () => {
+    markUnsaved();
     if (taskId) saveMarkersForTask(taskId);
   });
   makeResizable(marker, resizeHandle, () => {
+    markUnsaved();
     if (taskId) saveMarkersForTask(taskId);
   });
 
@@ -1857,6 +1972,7 @@ function exportPngWithText() {
 const endDraw = (e) => {
   if (!isDrawing) return;
   isDrawing = false;
+  markUnsaved();
   // commit current drawing to state
   const t = batch[state.tIdx];
   if (t && t.task_id) recordStrokeEnd(t.task_id);
@@ -1923,10 +2039,13 @@ if (colorPicker) {
 /* clear canvas */
 if (clearCanvasBtn) {
   clearCanvasBtn.addEventListener("click", () => {
+    const confirmed = confirm("Clear the workspace for this route?");
+    if (!confirmed) return;
     resizeCanvasToDisplay();
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     setCanvasBackground();
     hasDrawn = false;
+    markUnsaved();
     const t = batch[state.tIdx];
     if (t && t.task_id) {
       commitDrawingSnapshotToState(t.task_id);
@@ -1977,6 +2096,7 @@ if (canvas && ctx) {
       const x = e.clientX - rect.left;
       const y = e.clientY - rect.top;
       createTextBox(x, y);
+      markUnsaved();
       const taskId = getCurrentTaskId();
       if (taskId) saveTextBoxesForTask(taskId);
     }
@@ -2327,7 +2447,7 @@ function syncMapLockUI(taskId) {
   if (!openMapBtn) return;
   const locked = isMapLocked(taskId);
   openMapBtn.disabled = locked;
-  openMapBtn.textContent = locked ? "Satellite Map (Locked)" : "See Satellite Map";
+  openMapBtn.textContent = locked ? "GPS Map (Locked)" : "See GPS Map";
   saveState();
 }
 
@@ -2394,21 +2514,23 @@ function requestChecklistConfirmation() {
   const checkMarkers = document.getElementById("check-markers");
   const checkBetween = document.getElementById("check-between");
   const checkLabels = document.getElementById("check-labels");
+  const checkPayment = document.getElementById("check-payment");
   const confirmBtn = document.getElementById("checklist-confirm");
   const cancelBtn = document.getElementById("checklist-cancel");
 
-  if (!modal || !checkMarkers || !checkBetween || !checkLabels || !confirmBtn || !cancelBtn) {
+  if (!modal || !checkMarkers || !checkBetween || !checkLabels || !checkPayment || !confirmBtn || !cancelBtn) {
     return Promise.resolve(true);
   }
 
   const update = () => {
-    confirmBtn.disabled = !(checkMarkers.checked && checkBetween.checked && checkLabels.checked);
+    confirmBtn.disabled = !(checkMarkers.checked && checkBetween.checked && checkLabels.checked && checkPayment.checked);
   };
 
   const reset = () => {
     checkMarkers.checked = false;
     checkBetween.checked = false;
     checkLabels.checked = false;
+    checkPayment.checked = false;
     confirmBtn.disabled = true;
   };
 
@@ -2420,6 +2542,8 @@ function requestChecklistConfirmation() {
       modal.style.display = "none";
       checkMarkers.removeEventListener("change", update);
       checkBetween.removeEventListener("change", update);
+      checkLabels.removeEventListener("change", update);
+      checkPayment.removeEventListener("change", update);
       reset();
       resolve(value);
     };
@@ -2427,6 +2551,7 @@ function requestChecklistConfirmation() {
     checkMarkers.addEventListener("change", update);
     checkBetween.addEventListener("change", update);
     checkLabels.addEventListener("change", update);
+    checkPayment.addEventListener("change", update);
     confirmBtn.addEventListener("click", () => cleanup(true), { once: true });
     cancelBtn.addEventListener("click", () => cleanup(false), { once: true });
   });
@@ -2473,6 +2598,7 @@ function startAutoSave() {
 async function saveCurrentTaskToBackend() {
   const t = batch[state.tIdx];
   if (!t) return;
+  setSaveStatus("saving", "Saving...");
 
   const taskId = t.task_id;
   const m = getTaskMetrics(taskId);
@@ -2492,7 +2618,7 @@ async function saveCurrentTaskToBackend() {
     } else {
       // optional: if you want autosave to overwrite/update each time,
       // still call saveDrawingToBackend(taskId, png) and let backend replace it.
-      saveDrawingToBackend(taskId, png)
+      await saveDrawingToBackend(taskId, png);
     }
 
     m.timing.drawingDurationMs = performance.now() - m.timing.pageEnterMs;
@@ -2516,8 +2642,10 @@ async function saveCurrentTaskToBackend() {
       headers: {"Content-Type":"application/json"},
       body: JSON.stringify(payload)
     });
+    setSaveStatus("saved", "All changes saved");
   } catch (err) {
     console.warn("save_answer failed:", err);
+    setSaveStatus("error", "Save failed. Will retry on next autosave.");
   }
 
   saveState();
